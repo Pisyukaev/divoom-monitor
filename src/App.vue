@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import DeviceList from './components/device-list/list.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
 </script>
 
 <template>
   <div class="app-container">
     <header class="app-header">
       <h1>Divoom Device Monitor</h1>
+      <ThemeToggle />
     </header>
     <DeviceList />
   </div>
@@ -56,6 +58,7 @@ body {
   background-color: var(--el-bg-color);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
+  position: relative;
 }
 
 .app-header h1 {
