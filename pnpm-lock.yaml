@@ -20,6 +20,9 @@ dependencies:
   vue:
     specifier: ^3.5.13
     version: 3.5.26(typescript@5.6.3)
+  vue-router:
+    specifier: ^4.4.5
+    version: 4.6.4(vue@3.5.26)
 
 devDependencies:
   '@tauri-apps/cli':
@@ -748,6 +751,10 @@ packages:
       he: 1.2.0
     dev: true
 
+  /@vue/devtools-api@6.6.4:
+    resolution: {integrity: sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g==}
+    dev: false
+
   /@vue/language-core@2.2.12(typescript@5.6.3):
     resolution: {integrity: sha512-IsGljWbKGU1MZpBPN+BvPAdr55YPkj2nB/TBNGNC32Vy2qLG25DYu/NBN2vNtZqdRbTRjaoYrahLrToim2NanA==}
     peerDependencies:
@@ -1129,6 +1136,15 @@ packages:
       '@vue/composition-api':
         optional: true
     dependencies:
+      vue: 3.5.26(typescript@5.6.3)
+    dev: false
+
+  /vue-router@4.6.4(vue@3.5.26):
+    resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
+    peerDependencies:
+      vue: ^3.5.0
+    dependencies:
+      '@vue/devtools-api': 6.6.4
       vue: 3.5.26(typescript@5.6.3)
     dev: false
 

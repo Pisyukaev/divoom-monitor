@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DeviceList from './components/device-list/list.vue';
+import { RouterView } from 'vue-router';
 import ThemeToggle from './components/ThemeToggle.vue';
 </script>
 
@@ -9,7 +9,7 @@ import ThemeToggle from './components/ThemeToggle.vue';
       <h1>Divoom Device Monitor</h1>
       <ThemeToggle />
     </header>
-    <DeviceList />
+    <RouterView />
   </div>
 </template>
 

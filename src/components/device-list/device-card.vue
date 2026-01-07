@@ -1,16 +1,12 @@
 <script setup lang="ts">
-interface DivoomDevice {
-  name: string;
-  mac_address: string | null;
-  device_type: string;
-  ip_address: string | null;
-  signal_strength: number | null;
-  is_connected: boolean;
-  model: string | null;
-}
+import { useRouter } from 'vue-router';
+import type { DivoomDevice } from '../../types/device';
+
 const props = defineProps<{
   device: DivoomDevice;
 }>();
+
+const router = useRouter();
 
 function getSignalBarActive(
   barIndex: number,
@@ -22,12 +18,24 @@ function getSignalBarActive(
   const threshold = -30 - barIndex * 20;
   return signalStrength >= threshold;
 }
+
+function getDeviceId(device: DivoomDevice): string {
+  return encodeURIComponent(
+    device.ip_address || device.mac_address || device.name
+  );
+}
+
+function handleCardClick() {
+  const deviceId = getDeviceId(props.device);
+  router.push(`/device/${deviceId}`);
+}
 </script>
 
 <template>
   <el-card
     :shadow="device.is_connected ? 'always' : 'hover'"
-    :class="{ 'device-card-connected': device.is_connected }"
+    :class="{ 'device-card-connected': device.is_connected, 'device-card-clickable': true }"
+    @click="handleCardClick"
   >
     <template #header>
       <div class="device-header">
@@ -80,6 +88,16 @@ function getSignalBarActive(
 <style scoped>
 .device-card-connected {
   border: 2px solid var(--el-color-success);
+}
+
+.device-card-clickable {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.device-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .device-header {

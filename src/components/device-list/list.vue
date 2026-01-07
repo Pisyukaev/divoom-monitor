@@ -2,18 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { Search } from '@element-plus/icons-vue';
+import type { DivoomDevice } from '../../types/device';
 
 import DeviceCard from './device-card.vue';
-
-interface DivoomDevice {
-  name: string;
-  mac_address: string | null;
-  device_type: string;
-  ip_address: string | null;
-  signal_strength: number | null;
-  is_connected: boolean;
-  model: string | null;
-}
 
 const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
@@ -25,6 +16,7 @@ async function scanDevices() {
   try {
     const foundDevices = await invoke<DivoomDevice[]>('scan_devices');
     devices.value = foundDevices;
+    console.log(foundDevices);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to scan devices';
     console.error('Error scanning devices:', err);
