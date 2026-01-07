@@ -16,7 +16,6 @@ async function scanDevices() {
   try {
     const foundDevices = await invoke<DivoomDevice[]>('scan_devices');
     devices.value = foundDevices;
-    console.log(foundDevices);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to scan devices';
     console.error('Error scanning devices:', err);
