@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
 
@@ -17,62 +17,25 @@ const deviceId = computed(() => route.params.id as string);
 const deviceInfo = ref<DivoomDevice | null>(null);
 const isLoadingDevice = ref(false);
 
-// Локальная копия настроек для редактирования
-const localSettings = ref<DeviceSettings | null>(null);
-
-// Создаем глубокую копию settings в localSettings
-function syncLocalSettings() {
-  if (settings.value) {
-    localSettings.value = { ...settings.value };
-  } else {
-    localSettings.value = null;
-  }
+function createBooleanSetting<K extends keyof DeviceSettings>(
+  key: K,
+  trueValue: number = 1,
+  falseValue: number = 0
+) {
+  return computed({
+    get: () => (settings.value?.[key] as number) === trueValue,
+    set: (value: boolean) => {
+      if (settings.value) {
+        (settings.value[key] as number) = value ? trueValue : falseValue;
+      }
+    },
+  });
 }
 
-// Синхронизируем localSettings при изменении settings
-watch(
-  settings,
-  () => {
-    syncLocalSettings();
-  },
-  { immediate: true, deep: true }
-);
-
-const isLightMode = computed({
-  get: () => localSettings.value?.light_switch === 1 || false,
-  set: (value: boolean) => {
-    if (localSettings.value) {
-      localSettings.value.light_switch = value ? 1 : 0;
-    }
-  },
-});
-
-const isMirror = computed({
-  get: () => localSettings.value?.mirror_flag === 1 || false,
-  set: (value: boolean) => {
-    if (localSettings.value) {
-      localSettings.value.mirror_flag = value ? 1 : 0;
-    }
-  },
-});
-
-const isCelsius = computed({
-  get: () => localSettings.value?.temperature_mode === 0 || false,
-  set: (value: boolean) => {
-    if (localSettings.value) {
-      localSettings.value.temperature_mode = value ? 0 : 1;
-    }
-  },
-});
-
-const is24hours = computed({
-  get: () => localSettings.value?.time24_flag === 1 || false,
-  set: (value: boolean) => {
-    if (localSettings.value) {
-      localSettings.value.time24_flag = value ? 1 : 0;
-    }
-  },
-});
+const isLightMode = createBooleanSetting('light_switch');
+const isMirror = createBooleanSetting('mirror_flag');
+const is24hours = createBooleanSetting('time24_flag');
+const isCelsius = createBooleanSetting('temperature_mode', 0, 1);
 
 const handleChangeOption =
   <K extends keyof DeviceSettings>(
@@ -80,8 +43,8 @@ const handleChangeOption =
     method: (typeof commands)[number]
   ) =>
   async (value: DeviceSettings[K]) => {
-    if (localSettings.value && value !== undefined) {
-      localSettings.value[option] = value;
+    if (settings.value && value !== undefined) {
+      settings.value[option] = value;
 
       await invokeCommand(method, {
         ipAddress: deviceId.value,
@@ -101,15 +64,6 @@ function handleUpdateSettings() {
 onMounted(() => {
   handleUpdateSettings();
 });
-
-// Для отладки можно отслеживать изменения
-watch(
-  localSettings,
-  () => {
-    console.log('Local settings changed:', localSettings.value);
-  },
-  { deep: true }
-);
 </script>
 
 <template>
@@ -150,20 +104,20 @@ watch(
           style="margin-bottom: 20px"
         />
 
-        <div v-if="localSettings && !isLoadingSettings">
+        <div v-if="settings && !isLoadingSettings">
           <!-- Основные настройки -->
           <el-descriptions title="Основные настройки" :column="1" border>
             <el-descriptions-item
-              v-if="localSettings.light_switch !== undefined"
+              v-if="settings.light_switch !== undefined"
               label="Включить\выключить"
             >
               <el-switch
-                @change="(value: boolean) => handleChangeOption('light_switch', 'set_switch_screen')(Number(value))"
+                @change="(value: string | number | boolean) => handleChangeOption('light_switch', 'set_switch_screen')(Number(Boolean(value)))"
                 v-model="isLightMode"
               />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="localSettings.brightness !== undefined"
+              v-if="settings.brightness !== undefined"
               label="Яркость"
             >
               <div class="setting-value">
@@ -175,32 +129,32 @@ watch(
                   "
                 >
                   <el-slider
-                    @change="(value: number) => handleChangeOption('brightness', 'set_brightness')(value)"
+                    @change="(value: number | number[]) => handleChangeOption('brightness', 'set_brightness')(Array.isArray(value) ? value[0] : value)"
                     style="width: 80%; padding-right: 10px"
-                    :percentage="localSettings.brightness"
-                    v-model="localSettings.brightness"
-                    :range-end-label="`${localSettings.brightness}%`"
+                    :percentage="settings.brightness"
+                    v-model="settings.brightness"
+                    :range-end-label="`${settings.brightness}%`"
                     :format-tooltip="(value: number) => `${value}%`"
                     :max="100"
                     :min="0"
                     :step="10"
                   />
-                  <span>{{ `${localSettings.brightness}%` }}</span>
+                  <span>{{ `${settings.brightness}%` }}</span>
                 </div>
               </div>
             </el-descriptions-item>
 
             <el-descriptions-item
-              v-if="localSettings.mirror_flag !== undefined"
+              v-if="settings.mirror_flag !== undefined"
               label="Отзеркалить"
             >
               <el-switch
-                @change="(value: boolean) => handleChangeOption('mirror_flag', 'set_mirror_mode')(Number(value))"
+                @change="(value: string | number | boolean) => handleChangeOption('mirror_flag', 'set_mirror_mode')(Number(Boolean(value)))"
                 v-model="isMirror"
               />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="localSettings.temperature_mode !== undefined"
+              v-if="settings.temperature_mode !== undefined"
               label="Формат температуры"
             >
               <el-button-group>
@@ -229,11 +183,11 @@ watch(
               </el-button-group>
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="localSettings.time24_flag !== undefined"
+              v-if="settings.time24_flag !== undefined"
               label="24-часовой формат"
             >
               <el-switch
-                @change="(value: boolean) => handleChangeOption('time24_flag', 'set_24_hours_mode')(Number(value))"
+                @change="(value: string | number | boolean) => handleChangeOption('time24_flag', 'set_24_hours_mode')(Number(Boolean(value)))"
                 v-model="is24hours"
               />
             </el-descriptions-item>
@@ -241,7 +195,7 @@ watch(
         </div>
 
         <el-empty
-          v-if="!localSettings && !isLoadingSettings && !settingsError"
+          v-if="!settings && !isLoadingSettings && !settingsError"
           description="Настройки не загружены. Нажмите 'Обновить' для загрузки."
         />
       </el-card>
