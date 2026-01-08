@@ -34,7 +34,10 @@ function handleCardClick() {
 <template>
   <el-card
     :shadow="device.is_connected ? 'always' : 'hover'"
-    :class="{ 'device-card-connected': device.is_connected, 'device-card-clickable': true }"
+    :class="{
+      'device-card-connected': device.is_connected,
+      'device-card-clickable': true,
+    }"
     @click="handleCardClick"
   >
     <template #header>
@@ -51,16 +54,16 @@ function handleCardClick() {
         {{ device.device_type }}
       </el-descriptions-item>
 
-      <el-descriptions-item v-if="device.model" label="Модель">
-        {{ device.model }}
-      </el-descriptions-item>
-
       <el-descriptions-item v-if="device.ip_address" label="IP адрес">
         <el-text>{{ device.ip_address }}</el-text>
       </el-descriptions-item>
 
       <el-descriptions-item v-if="device.mac_address" label="MAC адрес">
         <el-text>{{ device.mac_address }}</el-text>
+      </el-descriptions-item>
+
+      <el-descriptions-item v-if="device.device_id" label="ID">
+        <el-text>{{ device.device_id }}</el-text>
       </el-descriptions-item>
 
       <el-descriptions-item

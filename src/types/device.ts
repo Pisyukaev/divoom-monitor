@@ -5,7 +5,7 @@ export interface DivoomDevice {
   ip_address: string | null;
   signal_strength: number | null;
   is_connected: boolean;
-  model: string | null;
+  device_id: number;
 }
 
 export interface NetworkSettings {

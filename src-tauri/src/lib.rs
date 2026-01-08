@@ -12,6 +12,7 @@ pub struct DivoomDevice {
     pub ip_address: Option<String>,
     pub signal_strength: Option<i32>,
     pub is_connected: bool,
+    pub device_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +129,11 @@ async fn discover_via_divoom_api() -> Result<Vec<DivoomDevice>, String> {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
 
+            let device_id = device_json
+                .get("DeviceId")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
             // Map hardware code to device type
             let device_type = match hardware {
                 400 => "Times Gate",
@@ -150,6 +156,7 @@ async fn discover_via_divoom_api() -> Result<Vec<DivoomDevice>, String> {
                 ip_address,
                 signal_strength: None,
                 is_connected: true,
+                device_id: Some(device_id),
             });
         }
     }

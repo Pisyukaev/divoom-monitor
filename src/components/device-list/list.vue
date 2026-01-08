@@ -16,7 +16,6 @@ async function scan() {
   error.value = null;
   try {
     const foundDevices = await scanDevices();
-    console.log(foundDevices);
     devices.value = foundDevices;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to scan devices';
