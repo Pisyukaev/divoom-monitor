@@ -201,7 +201,7 @@ watch(
 
             <el-descriptions-item
               v-if="localSettings.mirror_flag !== undefined"
-              label="Mirror flag"
+              label="Отзеркалить"
             >
               <el-switch
                 @change="(value: boolean) => handleChangeOption('mirror_flag', 'set_mirror_mode')(Number(value))"
@@ -209,14 +209,8 @@ watch(
               />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="localSettings.rotation_flag !== null"
-              label="Rotation flag"
-            >
-              <el-switch v-model="isRotation" />
-            </el-descriptions-item>
-            <el-descriptions-item
               v-if="localSettings.temperature_mode !== undefined"
-              label="Temperature mode"
+              label="Формат температуры"
             >
               <el-button-group>
                 <el-button
@@ -228,7 +222,7 @@ watch(
                         'set_temperature_mode'
                       )(0)
                   "
-                  >Celsius</el-button
+                  >Цельсий</el-button
                 >
                 <el-button
                   :type="!isCelsius ? 'primary' : ''"
@@ -239,13 +233,13 @@ watch(
                         'set_temperature_mode'
                       )(1)
                   "
-                  >Fahrenheit</el-button
+                  >Фаренгейт</el-button
                 >
               </el-button-group>
             </el-descriptions-item>
             <el-descriptions-item
               v-if="localSettings.time24_flag !== undefined"
-              label="24 hours flag"
+              label="24-часовой формат"
             >
               <el-switch
                 @change="(value: boolean) => handleChangeOption('time24_flag', 'set_24_hours_mode')(Number(value))"
