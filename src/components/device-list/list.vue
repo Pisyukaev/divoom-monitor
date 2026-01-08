@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 import { Search } from '@element-plus/icons-vue';
+
+import { scanDevices } from '../../api/common';
 import type { DivoomDevice } from '../../types/device';
 
 import DeviceCard from './device-card.vue';
@@ -10,11 +11,12 @@ const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
 const error = ref<string | null>(null);
 
-async function scanDevices() {
+async function scan() {
   isScanning.value = true;
   error.value = null;
   try {
-    const foundDevices = await invoke<DivoomDevice[]>('scan_devices');
+    const foundDevices = await scanDevices();
+    console.log(foundDevices);
     devices.value = foundDevices;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to scan devices';
@@ -25,7 +27,7 @@ async function scanDevices() {
 }
 
 onMounted(() => {
-  scanDevices();
+  scan();
 });
 </script>
 
@@ -36,7 +38,7 @@ onMounted(() => {
         type="primary"
         :icon="Search"
         :loading="isScanning"
-        @click="scanDevices"
+        @click="scan"
         size="large"
       >
         {{ isScanning ? 'Сканирование...' : 'Сканировать устройства' }}
