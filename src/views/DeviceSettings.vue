@@ -56,15 +56,6 @@ const isMirror = computed({
   },
 });
 
-const isRotation = computed({
-  get: () => localSettings.value?.rotation_flag === 1 || false,
-  set: (value: boolean) => {
-    if (localSettings.value) {
-      localSettings.value.rotation_flag = value ? 1 : 0;
-    }
-  },
-});
-
 const isCelsius = computed({
   get: () => localSettings.value?.temperature_mode === 0 || false,
   set: (value: boolean) => {
