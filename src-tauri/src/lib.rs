@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde::{de::value, Deserialize, Serialize};
+use serde_json::{json, Number, Value};
 use std::time::Duration;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -26,7 +26,7 @@ pub struct NetworkSettings {
 pub struct DeviceSettings {
     pub brightness: Option<u8>,
     pub rotation_flag: Option<u8>,
-    pub date_format: Option<u8>,
+    pub date_format: Option<String>,
     pub time24_flag: Option<u8>,
     pub temperature_mode: Option<u8>,
     pub mirror_flag: Option<u8>,
@@ -179,8 +179,8 @@ async fn get_device_info(ip_address: String) -> Result<DeviceSettings, String> {
             .map(|v| v as u8),
         date_format: result
             .get("DateFormat")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u8),
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         time24_flag: result
             .get("Time24Flag")
             .and_then(|v| v.as_u64())
@@ -200,11 +200,87 @@ async fn get_device_info(ip_address: String) -> Result<DeviceSettings, String> {
     })
 }
 
+#[tauri::command]
+async fn set_brightness(ip_address: String, value: Number) {
+    let result = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Channel/SetBrightness",
+            "Brightness": value
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
+#[tauri::command]
+async fn set_switch_screen(ip_address: String, value: Number) {
+    let result = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Channel/OnOffScreen",
+            "OnOff": value
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
+#[tauri::command]
+async fn set_temperature_mode(ip_address: String, value: Number) {
+    let result = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/SetDisTempMode",
+            // 0 - celsius, 1 - fahrenheit
+            "Mode": value
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
+#[tauri::command]
+async fn set_mirror_mode(ip_address: String, value: Number) {
+    let result = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/SetMirrorMode",
+            // 0 - disable, 1 - enable
+            "Mode": value
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
+#[tauri::command]
+async fn set_24_hours_mode(ip_address: String, value: Number) {
+    let result = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/SetTime24Flag",
+            // 0 - 0:12, 1 - 1:24
+            "Mode": value
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![scan_devices, get_device_info,])
+        .invoke_handler(tauri::generate_handler![
+            scan_devices,
+            get_device_info,
+            set_brightness,
+            set_switch_screen,
+            set_temperature_mode,
+            set_mirror_mode,
+            set_24_hours_mode,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
