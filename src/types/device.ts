@@ -17,10 +17,10 @@ export interface NetworkSettings {
 
 export interface DeviceSettings {
   brightness?: number;
-  volume?: number;
-  display_mode?: string;
-  current_time?: string;
-  network_settings?: NetworkSettings;
-  [key: string]: unknown;
+  rotation_flag: number;
+  date_format: string;
+  time24_flag: number;
+  temperature_mode: number;
+  mirror_flag: number;
+  light_switch: number;
 }
-

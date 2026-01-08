@@ -26,7 +26,7 @@ pub struct NetworkSettings {
 pub struct DeviceSettings {
     pub brightness: Option<u8>,
     pub rotation_flag: Option<u8>,
-    pub date_format: Option<u8>,
+    pub date_format: Option<String>,
     pub time24_flag: Option<u8>,
     pub temperature_mode: Option<u8>,
     pub mirror_flag: Option<u8>,
@@ -179,8 +179,8 @@ async fn get_device_info(ip_address: String) -> Result<DeviceSettings, String> {
             .map(|v| v as u8),
         date_format: result
             .get("DateFormat")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u8),
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         time24_flag: result
             .get("Time24Flag")
             .and_then(|v| v.as_u64())
