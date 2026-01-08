@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
+import { ArrowLeft, Refresh,  } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
-import type { DivoomDevice } from '../types/device';
+import type { DivoomDevice, DeviceSettings } from '../types/device';
 
 const router = useRouter();
 const route = useRoute();
@@ -12,51 +12,138 @@ const {
   settings,
   isLoadingSettings,
   settingsError,
-  fetchDeviceById,
   fetchDeviceSettings,
 } = useDevice();
 
 const deviceId = computed(() => route.params.id as string);
 const deviceInfo = ref<DivoomDevice | null>(null);
 const isLoadingDevice = ref(false);
-const deviceError = ref<string | null>(null);
 
-async function loadDevice() {
-  isLoadingDevice.value = true;
-  deviceError.value = null;
+// Локальная копия настроек для редактирования
+const localSettings = ref<DeviceSettings | null>(null);
 
-  try {
-    const loadedDevice = await fetchDeviceById(deviceId.value);
-    if (loadedDevice) {
-      deviceInfo.value = loadedDevice;
-      if (loadedDevice.ip_address) {
-        await fetchDeviceSettings(loadedDevice.ip_address);
-      }
-    } else {
-      deviceError.value = 'Устройство не найдено';
+// Создаем глубокую копию settings в localSettings
+function syncLocalSettings() {
+  if (settings.value) {
+    localSettings.value = { ...settings.value };
+
+    console.log(localSettings.value)
+  } else {
+    localSettings.value = null;
+  }
+}
+
+// Синхронизируем localSettings при изменении settings
+watch(settings, () => {
+  syncLocalSettings();
+}, { immediate: true, deep: true });
+
+const isLightMode = computed({
+  get: () => localSettings.value?.light_switch === 1 || false,
+  set: (value: boolean) => {
+    if (localSettings.value) {
+      localSettings.value.light_switch = value ? 1 : 0;
     }
-  } catch (error) {
-    deviceError.value =
-      error instanceof Error ? error.message : 'Ошибка загрузки устройства';
-    console.error('Error loading device:', error);
-  } finally {
-    isLoadingDevice.value = false;
   }
+});
+
+const isMirror = computed({
+  get: () => localSettings.value?.mirror_flag === 1 || false,
+  set: (value: boolean) => {
+    if (localSettings.value) {
+      localSettings.value.mirror_flag = value ? 1 : 0;
+    }
+  }
+});
+
+const isRotation = computed({
+  get: () => localSettings.value?.rotation_flag === 1 || false,
+  set: (value: boolean) => {
+    if (localSettings.value) {
+      localSettings.value.rotation_flag = value ? 1 : 0;
+    }
+  }
+});
+
+const isCelsius = computed({
+  get: () => localSettings.value?.temperature_mode === 0 || false,
+  set: (value: boolean) => {
+    if (localSettings.value) {
+      localSettings.value.temperature_mode = value ? 0 : 1;
+    }
+  }
+});
+
+const is24hours = computed({
+  get: () => localSettings.value?.time24_flag === 1 || false,
+  set: (value: boolean) => {
+    if (localSettings.value) {
+      localSettings.value.time24_flag = value ? 1 : 0;
+    }
+  }
+});
+
+
+const dateFormats = [{
+  value: 'yyyy-mm-dd',
+  label: 'yyyy-mm-dd',
+},{
+  value: 'dd-mm-yyyy',
+  label: 'dd-mm-yyyy',
+}, {
+  value: 'mm-dd-yyyy',
+  label: 'mm-dd-yyyy',
+}, {
+  value: 'yyyy.mm.dd',
+  label: 'yyyy.mm.dd',
+},{
+  value: 'dd.mm.yyyy',
+  label: 'dd.mm.yyyy'
+},{
+  value: 'mm.dd.yyyy',
+  label: 'mm.dd.yyyy'
+}]
+
+const actualDateFormat = computed({
+  get: () => {
+    if (localSettings.value === null) {
+      return null;
+    }
+    const dateFormat = dateFormats.find(({ value }) =>
+      value === localSettings.value?.date_format.toLocaleLowerCase()
+    );
+    return dateFormat;
+  },
+  set: (value: string | null) => {
+    if (localSettings.value && value) {
+      localSettings.value.date_format = value;
+    }
+  }
+});
+
+
+function handleSelectDateFormat(value: string){
+  console.log(value)
 }
 
-async function handleRefreshSettings() {
-  if (deviceInfo.value?.ip_address) {
-    await fetchDeviceSettings(deviceInfo.value.ip_address);
-  }
-}
 
 function goBack() {
   router.push('/');
 }
 
+function handleUpdateSettings(){
+  fetchDeviceSettings(deviceId.value)
+}
+
 onMounted(() => {
-  loadDevice();
+  handleUpdateSettings()
 });
+
+// Для отладки можно отслеживать изменения
+watch(localSettings, () => {
+  console.log('Local settings changed:', localSettings.value);
+}, { deep: true });
+
 </script>
 
 <template>
@@ -67,65 +154,17 @@ onMounted(() => {
       <h2 v-else>Настройки устройства</h2>
     </div>
 
-    <el-loading
-      v-if="isLoadingDevice"
-      :loading="isLoadingDevice"
-      text="Загрузка устройства..."
-    />
-
-    <el-alert
-      v-if="deviceError"
-      :title="deviceError"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 20px"
-    />
-
-    <div v-if="deviceInfo && !isLoadingDevice" class="content-section">
-      <!-- Информация об устройстве -->
-      <el-card class="info-card" shadow="hover">
-        <template #header>
-          <div class="card-header">
-            <span>Информация об устройстве</span>
-          </div>
-        </template>
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="Тип устройства">
-            {{ deviceInfo.device_type }}
-          </el-descriptions-item>
-          <el-descriptions-item v-if="deviceInfo.model" label="Модель">
-            {{ deviceInfo.model }}
-          </el-descriptions-item>
-          <el-descriptions-item v-if="deviceInfo.ip_address" label="IP адрес">
-            {{ deviceInfo.ip_address }}
-          </el-descriptions-item>
-          <el-descriptions-item v-if="deviceInfo.mac_address" label="MAC адрес">
-            {{ deviceInfo.mac_address }}
-          </el-descriptions-item>
-          <el-descriptions-item label="Статус">
-            <el-tag :type="deviceInfo.is_connected ? 'success' : 'danger'">
-              {{ deviceInfo.is_connected ? 'Подключено' : 'Не подключено' }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item
-            v-if="deviceInfo.signal_strength !== null"
-            label="Уровень сигнала"
-          >
-            {{ deviceInfo.signal_strength }} dBm
-          </el-descriptions-item>
-        </el-descriptions>
-      </el-card>
+    <div v-if="!isLoadingDevice" v-loading="isLoadingDevice" class="content-section">
 
       <!-- Текущие настройки -->
-      <el-card class="settings-card" shadow="hover">
+      <el-card v-loading="isLoadingDevice" class="settings-card" shadow="hover">
         <template #header>
           <div class="card-header">
             <span>Текущие настройки</span>
             <el-button
               :icon="Refresh"
-              @click="handleRefreshSettings"
               :loading="isLoadingSettings"
+              @click="handleUpdateSettings"
               size="small"
               circle
               :title="'Обновить настройки'"
@@ -133,11 +172,6 @@ onMounted(() => {
           </div>
         </template>
 
-        <el-loading
-          v-if="isLoadingSettings"
-          :loading="isLoadingSettings"
-          text="Загрузка настроек..."
-        />
 
         <el-alert
           v-if="settingsError"
@@ -148,110 +182,95 @@ onMounted(() => {
           style="margin-bottom: 20px"
         />
 
-        <div v-if="settings && !isLoadingSettings">
+        <div v-if="localSettings && !isLoadingSettings">
           <!-- Основные настройки -->
           <el-descriptions title="Основные настройки" :column="1" border>
             <el-descriptions-item
-              v-if="settings.brightness !== undefined"
+              v-if="localSettings.brightness !== undefined"
               label="Яркость"
             >
               <div class="setting-value">
-                <el-progress
-                  :percentage="settings.brightness"
-                  :format="(percentage) => `${percentage}%`"
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <el-slider
+                  style="width: 80%;"
+                  :percentage="localSettings.brightness"
+                  v-model="localSettings.brightness"
+                  :range-end-label="`${localSettings.brightness}%`"
+                  :format-tooltip="(value: number) => `${value}%`"
+                  :max="100"
+                  :min="0"
+                  :step="10"
                 />
+                <span>{{ `${localSettings.brightness}%` }}</span>
               </div>
+            </div>
             </el-descriptions-item>
+
             <el-descriptions-item
-              v-if="settings.volume !== undefined"
-              label="Громкость"
+              v-if="localSettings.date_format !== undefined"
+              label="Формат даты"
             >
-              <div class="setting-value">
-                <el-progress
-                  :percentage="settings.volume"
-                  :format="(percentage) => `${percentage}%`"
+              <el-select v-model="actualDateFormat"
+              placeholder="Формат даты" 
+              @change="handleSelectDateFormat"
+              >
+                <el-option v-for="item in dateFormats"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value" 
                 />
-              </div>
+              </el-select>
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="settings.display_mode"
-              label="Режим отображения"
+              v-if="localSettings.light_switch !== undefined"
+              label="Light switch"
             >
-              <el-tag>{{ settings.display_mode }}</el-tag>
+              <el-switch
+                v-model="isLightMode"
+              />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="settings.current_time"
-              label="Текущее время"
+              v-if="localSettings.mirror_flag !== undefined"
+              label="Mirror flag"
             >
-              {{ settings.current_time }}
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <!-- Сетевые настройки -->
-          <el-descriptions
-            v-if="settings.network_settings"
-            title="Сетевые настройки"
-            :column="1"
-            border
-            style="margin-top: 20px"
-          >
-            <el-descriptions-item
-              v-if="settings.network_settings.ssid"
-              label="SSID"
-            >
-              {{ settings.network_settings.ssid }}
+            <el-switch
+                v-model="isMirror"
+              />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="settings.network_settings.ip_address"
-              label="IP адрес"
+              v-if="localSettings.rotation_flag !== null"
+              label="Rotation flag"
             >
-              {{ settings.network_settings.ip_address }}
+            <el-switch
+                v-model="isRotation"
+              />
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="settings.network_settings.mac_address"
-              label="MAC адрес"
+              v-if="localSettings.temperature_mode !== undefined"
+              label="Temperature mode"
             >
-              {{ settings.network_settings.mac_address }}
+            <el-button-group>
+              <el-button 
+                :type="isCelsius ? 'primary' : ''"
+                @click="isCelsius = true" 
+              >Celsius</el-button>
+              <el-button 
+                :type="!isCelsius ? 'primary' : ''"
+                @click="isCelsius = false"
+              >Fahrenheit</el-button>
+            </el-button-group>
             </el-descriptions-item>
             <el-descriptions-item
-              v-if="settings.network_settings.signal_strength !== undefined"
-              label="Уровень сигнала"
+              v-if="localSettings.time24_flag !== undefined"
+              label="24 hours flag"
             >
-              {{ settings.network_settings.signal_strength }} dBm
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <!-- Дополнительные настройки -->
-          <el-descriptions
-            title="Дополнительные настройки"
-            :column="1"
-            border
-            style="margin-top: 20px"
-          >
-            <el-descriptions-item
-              v-for="(value, key) in settings"
-              :key="key"
-              v-if="
-                key !== 'brightness' &&
-                key !== 'volume' &&
-                key !== 'display_mode' &&
-                key !== 'current_time' &&
-                key !== 'network_settings' &&
-                value !== null &&
-                value !== undefined
-              "
-              :label="key"
-            >
-              <el-tag v-if="typeof value === 'boolean'">
-                {{ value ? 'Включено' : 'Выключено' }}
-              </el-tag>
-              <span v-else>{{ String(value) }}</span>
+            <el-switch v-model="is24hours" />
             </el-descriptions-item>
           </el-descriptions>
         </div>
 
         <el-empty
-          v-if="!settings && !isLoadingSettings && !settingsError"
+          v-if="!localSettings && !isLoadingSettings && !settingsError"
           description="Настройки не загружены. Нажмите 'Обновить' для загрузки."
         />
       </el-card>

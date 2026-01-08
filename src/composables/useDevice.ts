@@ -18,49 +18,23 @@ export function useDevice() {
     return decodeURIComponent(id);
   }
 
-  async function fetchDeviceById(id: string): Promise<DivoomDevice | null> {
+  async function fetchDeviceSettings(
+    id: string
+  ): Promise<DeviceSettings | null> {
     try {
       const decodedId = decodeDeviceId(id);
       // Try to get device info by IP address
       if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-        const deviceInfo = await invoke<DivoomDevice>('get_device_info', {
+        const deviceInfo = await invoke<DeviceSettings>('get_device_info', {
           ipAddress: decodedId,
         });
+        settings.value = deviceInfo;
         return deviceInfo;
       }
       return null;
     } catch (error) {
       console.error('Error fetching device:', error);
       return null;
-    }
-  }
-
-  async function fetchDeviceSettings(ipAddress: string): Promise<void> {
-    if (!ipAddress) {
-      settingsError.value = 'IP адрес устройства не указан';
-      return;
-    }
-
-    isLoadingSettings.value = true;
-    settingsError.value = null;
-
-    try {
-      const deviceSettings = await invoke<DeviceSettings>(
-        'get_device_settings',
-        {
-          ipAddress,
-        }
-      );
-      settings.value = deviceSettings;
-    } catch (error) {
-      settingsError.value =
-        error instanceof Error
-          ? error.message
-          : 'Не удалось загрузить настройки';
-      console.error('Error fetching device settings:', error);
-      settings.value = null;
-    } finally {
-      isLoadingSettings.value = false;
     }
   }
 
@@ -71,7 +45,6 @@ export function useDevice() {
     settingsError,
     getDeviceId,
     decodeDeviceId,
-    fetchDeviceById,
     fetchDeviceSettings,
   };
 }
