@@ -5,6 +5,19 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:allow-app-read",
+    "fs:allow-app-read-recursive",
+    "fs:allow-appcache-read",
+    "fs:allow-appcache-read-recursive",
+    "fs:allow-appconfig-read",
+    "fs:allow-appconfig-read-recursive",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-applocaldata-read",
+    "fs:allow-applocaldata-read-recursive",
+    "fs:allow-read-file"
   ]
 }

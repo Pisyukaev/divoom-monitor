@@ -6,6 +6,8 @@ import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
 import { invokeCommand } from '../api/times-gate';
 import { commands } from '../constants';
 import { useDevice } from '../composables/useDevice';
+import { scanDevices } from '../api/common';
+import ScreenManager from '../components/times-gate/ScreenManager.vue';
 import type { DivoomDevice, DeviceSettings } from '../types/device';
 
 const router = useRouter();
@@ -16,6 +18,39 @@ const { settings, isLoadingSettings, settingsError, fetchDeviceSettings } =
 const deviceId = computed(() => route.params.id as string);
 const deviceInfo = ref<DivoomDevice | null>(null);
 const isLoadingDevice = ref(false);
+
+const isTimesGate = computed(() => {
+  return deviceInfo.value?.device_type === 'Times Gate';
+});
+
+const deviceIp = computed(() => {
+  const decodedId = decodeURIComponent(deviceId.value);
+  if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+    return decodedId;
+  }
+  return deviceInfo.value?.ip_address || '';
+});
+
+async function loadDeviceInfo() {
+  try {
+    isLoadingDevice.value = true;
+    const devices = await scanDevices();
+    const decodedId = decodeURIComponent(deviceId.value);
+    const foundDevice = devices.find(
+      (d) =>
+        d.ip_address === decodedId ||
+        d.mac_address === decodedId ||
+        d.name === decodedId
+    );
+    if (foundDevice) {
+      deviceInfo.value = foundDevice;
+    }
+  } catch (error) {
+    console.error('Error loading device info:', error);
+  } finally {
+    isLoadingDevice.value = false;
+  }
+}
 
 function createBooleanSetting<K extends keyof DeviceSettings>(
   key: K,
@@ -46,8 +81,9 @@ const handleChangeOption =
     if (settings.value && value !== undefined) {
       settings.value[option] = value;
 
+      const ip = deviceIp.value || decodeURIComponent(deviceId.value);
       await invokeCommand(method, {
-        ipAddress: deviceId.value,
+        ipAddress: ip,
         value,
       });
     }
@@ -63,6 +99,7 @@ function handleUpdateSettings() {
 
 onMounted(() => {
   handleUpdateSettings();
+  loadDeviceInfo();
 });
 </script>
 
@@ -74,13 +111,13 @@ onMounted(() => {
       <h2 v-else>Настройки устройства</h2>
     </div>
 
-    <div
-      v-if="!isLoadingDevice"
-      v-loading="isLoadingDevice"
-      class="content-section"
-    >
+    <div class="content-section">
       <!-- Текущие настройки -->
-      <el-card v-loading="isLoadingDevice" class="settings-card" shadow="hover">
+      <el-card
+        v-loading="isLoadingSettings"
+        class="settings-card"
+        shadow="hover"
+      >
         <template #header>
           <div class="card-header">
             <span>Текущие настройки</span>
@@ -198,6 +235,16 @@ onMounted(() => {
           v-if="!settings && !isLoadingSettings && !settingsError"
           description="Настройки не загружены. Нажмите 'Обновить' для загрузки."
         />
+      </el-card>
+
+      <!-- Настройка экранов Times Gate -->
+      <el-card
+        v-if="isTimesGate && deviceIp"
+        class="screen-config-card"
+        shadow="hover"
+        style="margin-top: 20px"
+      >
+        <ScreenManager :device-id="deviceId" :device-ip="deviceIp" />
       </el-card>
 
       <!-- Секции для будущего расширения -->

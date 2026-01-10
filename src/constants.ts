@@ -33,4 +33,7 @@ export const commands = [
   'set_mirror_mode',
   'set_24_hours_mode',
   'get_device_info',
+  'upload_image_from_url',
+  'upload_image_from_file',
+  'set_screen_text',
 ] as const;
