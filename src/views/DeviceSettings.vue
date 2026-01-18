@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue';
+import { ArrowLeft, Refresh, WindPower } from '@element-plus/icons-vue';
 
 import { invokeCommand } from '../api/times-gate';
 import { commands } from '../constants';
@@ -77,17 +77,17 @@ const handleChangeOption =
     option: K,
     method: (typeof commands)[number]
   ) =>
-  async (value: DeviceSettings[K]) => {
-    if (settings.value && value !== undefined) {
-      settings.value[option] = value;
+    async (value: DeviceSettings[K]) => {
+      if (settings.value && value !== undefined) {
+        settings.value[option] = value;
 
-      const ip = deviceIp.value || decodeURIComponent(deviceId.value);
-      await invokeCommand(method, {
-        ipAddress: ip,
-        value,
-      });
-    }
-  };
+        const ip = deviceIp.value || decodeURIComponent(deviceId.value);
+        await invokeCommand(method, {
+          ipAddress: ip,
+          value,
+        });
+      }
+    };
 
 function goBack() {
   router.push('/');
@@ -95,6 +95,12 @@ function goBack() {
 
 function handleUpdateSettings() {
   fetchDeviceSettings(deviceId.value);
+}
+
+function handleRebootDevice() {
+  invokeCommand('reboot_device', {
+    ipAddress: deviceIp.value,
+  });
 }
 
 onMounted(() => {
@@ -113,139 +119,82 @@ onMounted(() => {
 
     <div class="content-section">
       <!-- Текущие настройки -->
-      <el-card
-        v-loading="isLoadingSettings"
-        class="settings-card"
-        shadow="hover"
-      >
+      <el-card v-loading="isLoadingSettings" class="settings-card" shadow="hover">
         <template #header>
           <div class="card-header">
             <span>Текущие настройки</span>
-            <el-button
-              :icon="Refresh"
-              :loading="isLoadingSettings"
-              @click="handleUpdateSettings"
-              size="small"
-              circle
-              :title="'Обновить настройки'"
-            />
+            <el-button :icon="Refresh" :loading="isLoadingSettings" @click="handleUpdateSettings" size="small" circle
+              :title="'Обновить настройки'" />
+            <el-button :icon="WindPower" :loading="isLoadingSettings" @click="handleRebootDevice" size="small" circle
+              :title="'Перезагрузить устройство'" />
           </div>
         </template>
 
-        <el-alert
-          v-if="settingsError"
-          :title="settingsError"
-          type="error"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 20px"
-        />
+        <el-alert v-if="settingsError" :title="settingsError" type="error" :closable="false" show-icon
+          style="margin-bottom: 20px" />
 
         <div v-if="settings && !isLoadingSettings">
           <!-- Основные настройки -->
           <el-descriptions title="Основные настройки" :column="1" border>
-            <el-descriptions-item
-              v-if="settings.light_switch !== undefined"
-              label="Включить\выключить"
-            >
+            <el-descriptions-item v-if="settings.light_switch !== undefined" label="Включить\выключить">
               <el-switch
                 @change="(value: string | number | boolean) => handleChangeOption('light_switch', 'set_switch_screen')(Number(Boolean(value)))"
-                v-model="isLightMode"
-              />
+                v-model="isLightMode" />
             </el-descriptions-item>
-            <el-descriptions-item
-              v-if="settings.brightness !== undefined"
-              label="Яркость"
-            >
+            <el-descriptions-item v-if="settings.brightness !== undefined" label="Яркость">
               <div class="setting-value">
-                <div
-                  style="
+                <div style="
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                  "
-                >
+                  ">
                   <el-slider
                     @change="(value: number | number[]) => handleChangeOption('brightness', 'set_brightness')(Array.isArray(value) ? value[0] : value)"
-                    style="width: 80%; padding-right: 10px"
-                    :percentage="settings.brightness"
-                    v-model="settings.brightness"
-                    :range-end-label="`${settings.brightness}%`"
-                    :format-tooltip="(value: number) => `${value}%`"
-                    :max="100"
-                    :min="0"
-                    :step="10"
-                  />
+                    style="width: 80%; padding-right: 10px" :percentage="settings.brightness"
+                    v-model="settings.brightness" :range-end-label="`${settings.brightness}%`"
+                    :format-tooltip="(value: number) => `${value}%`" :max="100" :min="0" :step="10" />
                   <span>{{ `${settings.brightness}%` }}</span>
                 </div>
               </div>
             </el-descriptions-item>
 
-            <el-descriptions-item
-              v-if="settings.mirror_flag !== undefined"
-              label="Отзеркалить"
-            >
+            <el-descriptions-item v-if="settings.mirror_flag !== undefined" label="Отзеркалить">
               <el-switch
                 @change="(value: string | number | boolean) => handleChangeOption('mirror_flag', 'set_mirror_mode')(Number(Boolean(value)))"
-                v-model="isMirror"
-              />
+                v-model="isMirror" />
             </el-descriptions-item>
-            <el-descriptions-item
-              v-if="settings.temperature_mode !== undefined"
-              label="Формат температуры"
-            >
+            <el-descriptions-item v-if="settings.temperature_mode !== undefined" label="Формат температуры">
               <el-button-group>
-                <el-button
-                  :type="isCelsius ? 'primary' : ''"
-                  @click="
-                    () =>
-                      handleChangeOption(
-                        'temperature_mode',
-                        'set_temperature_mode'
-                      )(0)
-                  "
-                  >Цельсий</el-button
-                >
-                <el-button
-                  :type="!isCelsius ? 'primary' : ''"
-                  @click="
-                    () =>
-                      handleChangeOption(
-                        'temperature_mode',
-                        'set_temperature_mode'
-                      )(1)
-                  "
-                  >Фаренгейт</el-button
-                >
+                <el-button :type="isCelsius ? 'primary' : ''" @click="
+                  () =>
+                    handleChangeOption(
+                      'temperature_mode',
+                      'set_temperature_mode'
+                    )(0)
+                ">Цельсий</el-button>
+                <el-button :type="!isCelsius ? 'primary' : ''" @click="
+                  () =>
+                    handleChangeOption(
+                      'temperature_mode',
+                      'set_temperature_mode'
+                    )(1)
+                ">Фаренгейт</el-button>
               </el-button-group>
             </el-descriptions-item>
-            <el-descriptions-item
-              v-if="settings.time24_flag !== undefined"
-              label="24-часовой формат"
-            >
+            <el-descriptions-item v-if="settings.time24_flag !== undefined" label="24-часовой формат">
               <el-switch
                 @change="(value: string | number | boolean) => handleChangeOption('time24_flag', 'set_24_hours_mode')(Number(Boolean(value)))"
-                v-model="is24hours"
-              />
+                v-model="is24hours" />
             </el-descriptions-item>
           </el-descriptions>
         </div>
 
-        <el-empty
-          v-if="!settings && !isLoadingSettings && !settingsError"
-          description="Настройки не загружены. Нажмите 'Обновить' для загрузки."
-        />
+        <el-empty v-if="!settings && !isLoadingSettings && !settingsError"
+          description="Настройки не загружены. Нажмите 'Обновить' для загрузки." />
       </el-card>
 
       <!-- Настройка экранов Times Gate -->
-      <el-card
-        v-if="isTimesGate && deviceIp"
-        class="screen-config-card"
-        shadow="hover"
-        style="margin-top: 20px"
-      >
-        <ScreenManager :device-id="deviceId" :device-ip="deviceIp" />
-      </el-card>
+      <ScreenManager v-if="isTimesGate && deviceIp" :device-id="deviceId" :device-ip="deviceIp" />
 
       <!-- Секции для будущего расширения -->
       <el-card class="actions-card" shadow="hover" style="margin-top: 20px">
@@ -254,12 +203,8 @@ onMounted(() => {
             <span>Управление устройством</span>
           </div>
         </template>
-        <el-alert
-          title="Функции управления будут добавлены в будущих версиях"
-          type="info"
-          :closable="false"
-          show-icon
-        />
+        <el-alert title="Функции управления будут добавлены в будущих версиях" type="info" :closable="false"
+          show-icon />
       </el-card>
     </div>
   </div>
