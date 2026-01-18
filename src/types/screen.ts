@@ -5,7 +5,7 @@ export interface TextElement {
   y: number;
   fontSize?: number;
   color?: string;
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: 0 | 1 | 2 | 3 | 4;
 }
 
 export interface ScreenImage {
