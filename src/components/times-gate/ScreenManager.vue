@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import ScreenEditor from './ScreenEditor.vue';
@@ -106,14 +106,6 @@ async function handleSendAllToDevice() {
       // Send all texts for this screen
       for (const text of config.texts) {
         try {
-          const color = text.color
-            ? text.color
-                .replace('#', '')
-                .match(/.{2}/g)
-                ?.map((c) => parseInt(c, 16))
-                .join(',') || '255,255,255'
-            : '255,255,255';
-
           await invoke('set_screen_text', {
             ipAddress: props.deviceIp,
             screenIndex: i,
@@ -122,7 +114,7 @@ async function handleSendAllToDevice() {
               x: text.x,
               y: text.y,
               font_size: text.fontSize,
-              color: color,
+              color: text.color,
               alignment: text.alignment,
             },
           });
@@ -170,17 +162,9 @@ watch(
       </template>
 
       <el-tabs v-model="activeTab" type="border-card">
-        <el-tab-pane
-          v-for="i in 5"
-          :key="i - 1"
-          :label="`Экран ${i}`"
-          :name="String(i - 1)"
-        >
-          <ScreenEditor
-            :config="screenConfigs[i - 1] || { screenIndex: i - 1, texts: [] }"
-            :device-ip="deviceIp"
-            @update:config="(config) => handleConfigUpdate(i - 1, config)"
-          />
+        <el-tab-pane v-for="i in 5" :key="i - 1" :label="`Экран ${i}`" :name="String(i - 1)">
+          <ScreenEditor :config="screenConfigs[i - 1] || { screenIndex: i - 1, texts: [] }" :device-ip="deviceIp"
+            @update:config="(config) => handleConfigUpdate(i - 1, config)" />
         </el-tab-pane>
       </el-tabs>
     </el-card>
