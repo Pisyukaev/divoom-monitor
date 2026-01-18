@@ -304,8 +304,8 @@ async fn set_24_hours_mode(ip_address: String, value: Number) {
     .map_err(|e| format!("Failed to send command: {}", e));
 }
 
-fn resize_image_to_128x128(img: DynamicImage) -> Result<Vec<u8>, String> {
-    let resized = img.resize_exact(128, 128, image::imageops::FilterType::Lanczos3);
+fn resize_image(img: DynamicImage, max_width: u32, max_height: u32) -> Result<Vec<u8>, String> {
+    let resized = img.resize_exact(max_width, max_height, image::imageops::FilterType::Lanczos3);
     let rgba = resized.to_rgba8();
     let mut buffer = Vec::new();
     {
@@ -357,7 +357,7 @@ async fn upload_image_from_url(
     url: String,
 ) -> Result<(), String> {
     let img = load_image_from_url(&url).await?;
-    let image_data = resize_image_to_128x128(img)?;
+    let image_data = resize_image(img, 128, 128)?;
     let base64_data = general_purpose::STANDARD.encode(&image_data);
 
     // Create LCD array with 1 at screen_index position, 0 elsewhere
@@ -395,7 +395,7 @@ async fn upload_image_from_file(
     file_path: String,
 ) -> Result<(), String> {
     let img = load_image_from_file(&file_path).await?;
-    let image_data = resize_image_to_128x128(img)?;
+    let image_data = resize_image(img, 128, 128)?;
     let base64_data = general_purpose::STANDARD.encode(&image_data);
 
     // Create LCD array with 1 at screen_index position, 0 elsewhere
