@@ -36,4 +36,5 @@ export const commands = [
   'upload_image_from_url',
   'upload_image_from_file',
   'set_screen_text',
+  'reboot_device',
 ] as const;

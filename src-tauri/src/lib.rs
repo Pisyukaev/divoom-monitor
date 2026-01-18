@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
-use image::{codecs::png::PngEncoder, DynamicImage, ImageEncoder};
+use image::codecs::jpeg::JpegEncoder;
+use image::{DynamicImage, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use std::path::Path;
@@ -305,12 +306,24 @@ async fn set_24_hours_mode(ip_address: String, value: Number) {
     .map_err(|e| format!("Failed to send command: {}", e));
 }
 
+#[tauri::command]
+async fn reboot_device(ip_address: String) {
+    let _ = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/SysReboot",
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
 fn resize_image(img: DynamicImage, max_width: u32, max_height: u32) -> Result<Vec<u8>, String> {
     let resized = img.resize_exact(max_width, max_height, image::imageops::FilterType::Lanczos3);
     let rgba = resized.to_rgba8();
     let mut buffer = Vec::new();
     {
-        let encoder = PngEncoder::new(&mut buffer);
+        let encoder = JpegEncoder::new(&mut buffer);
         encoder
             .write_image(
                 rgba.as_raw(),
@@ -320,6 +333,7 @@ fn resize_image(img: DynamicImage, max_width: u32, max_height: u32) -> Result<Ve
             )
             .map_err(|e| format!("Failed to encode image: {}", e))?;
     }
+
     Ok(buffer)
 }
 
@@ -447,8 +461,8 @@ async fn set_screen_text(
             "x": text_config.x,
             "y": text_config.y,
             "dir": 0,
-            "font": 1,
-            "TextWidth": font_size,
+            "font": font_size,
+            "TextWidth": 64,
             "speed": 100,
             "TextString": text_config.content,
             "color": color,
@@ -493,6 +507,7 @@ pub fn run() {
             upload_image_from_url,
             upload_image_from_file,
             set_screen_text,
+            reboot_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
