@@ -49,11 +49,11 @@ pub struct DeviceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextConfig {
     pub content: String,
-    pub x: u32,
-    pub y: u32,
-    pub font_size: Option<u32>,
+    pub x: u8,
+    pub y: u8,
+    pub font_size: Option<u8>,
     pub color: Option<String>,
-    pub alignment: Option<String>,
+    pub alignment: Option<u8>,
 }
 
 async fn send_command(ip: &str, command: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -437,7 +437,7 @@ async fn set_screen_text(
         .color
         .unwrap_or_else(|| "255,255,255".to_string());
     let font_size = text_config.font_size.unwrap_or(16);
-    let alignment = text_config.alignment.as_deref().unwrap_or("left");
+    let alignment = text_config.alignment.unwrap_or(0);
 
     send_command(
         &ip_address,
