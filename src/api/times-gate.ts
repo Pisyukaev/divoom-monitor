@@ -4,7 +4,7 @@ import { commands } from '../constants';
 
 export const invokeCommand = async (
   method: (typeof commands)[number],
-  options: { ipAddress: string; value: string | number }
+  options: { ipAddress: string; value?: string | number }
 ) => {
   try {
     const response = await invoke(method, options);
