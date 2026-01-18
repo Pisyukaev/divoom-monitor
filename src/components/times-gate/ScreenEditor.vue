@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
-import type { ScreenConfig, TextElement, ScreenImage } from '../../types/screen';
+import type { ScreenConfig, TextElement } from '../../types/screen';
 
 const props = defineProps<{
   config: ScreenConfig;
@@ -18,9 +18,16 @@ const emit = defineEmits<{
 const imageUrlInput = ref('');
 const isLoadingImage = ref(false);
 const newTextContent = ref('');
-const newTextColor = ref('#ffffff');
+const newTextColor = ref('#FFFFFF');
 const newTextSize = ref(16);
-const newTextAlignment = ref<'left' | 'center' | 'right'>('left');
+const newTextAlignment = ref<0 | 1 | 2 | 3 | 4>(0);
+const newTextAlignmentOptions = [
+  { label: 'Scroll', value: 0 as const },
+  { label: 'Normal', value: 1 as const },
+  { label: 'Middle', value: 2 as const },
+  { label: 'Right', value: 3 as const },
+  { label: 'Left', value: 4 as const },
+];
 
 const localConfig = computed({
   get: () => props.config,
@@ -126,7 +133,7 @@ function handleAddText() {
     x: 10,
     y: 20,
     fontSize: newTextSize.value,
-    color: newTextColor.value,
+    color: newTextColor.value.toUpperCase(),
     alignment: newTextAlignment.value,
   };
 
@@ -155,22 +162,8 @@ function handleUpdateTextPosition(textId: string, x: number, y: number) {
   };
 }
 
-function hexToRgb(hex: string): string {
-  // Remove # if present
-  hex = hex.replace('#', '');
-  
-  // Parse hex to RGB
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  
-  return `${r},${g},${b}`;
-}
-
 async function handleSendTextToDevice(text: TextElement) {
   try {
-    const color = text.color ? hexToRgb(text.color) : '255,255,255';
-    
     await invoke('set_screen_text', {
       ipAddress: props.deviceIp,
       screenIndex: props.config.screenIndex,
@@ -179,7 +172,7 @@ async function handleSendTextToDevice(text: TextElement) {
         x: text.x,
         y: text.y,
         font_size: text.fontSize,
-        color: color,
+        color: text.color?.toUpperCase(),
         alignment: text.alignment,
       },
     });
@@ -200,37 +193,20 @@ async function handleSendTextToDevice(text: TextElement) {
         </template>
 
         <div class="control-section">
-          <el-button
-            type="primary"
-            @click="handleLoadLocalImage"
-            :loading="isLoadingImage"
-            style="width: 100%; margin-bottom: 10px"
-          >
+          <el-button type="primary" @click="handleLoadLocalImage" :loading="isLoadingImage"
+            style="width: 100%; margin-bottom: 10px">
             Загрузить с компьютера
           </el-button>
 
-          <el-input
-            v-model="imageUrlInput"
-            placeholder="URL изображения"
-            style="margin-bottom: 10px"
-          >
+          <el-input v-model="imageUrlInput" placeholder="URL изображения" style="margin-bottom: 10px">
             <template #append>
-              <el-button
-                @click="handleLoadImageFromUrl"
-                :loading="isLoadingImage"
-                :disabled="!imageUrlInput.trim()"
-              >
+              <el-button @click="handleLoadImageFromUrl" :loading="isLoadingImage" :disabled="!imageUrlInput.trim()">
                 Загрузить
               </el-button>
             </template>
           </el-input>
 
-          <el-button
-            v-if="localConfig.image"
-            type="danger"
-            @click="handleRemoveImage"
-            style="width: 100%"
-          >
+          <el-button v-if="localConfig.image" type="danger" @click="handleRemoveImage" style="width: 100%">
             Удалить изображение
           </el-button>
         </div>
@@ -242,35 +218,20 @@ async function handleSendTextToDevice(text: TextElement) {
         </template>
 
         <div class="control-section">
-          <el-input
-            v-model="newTextContent"
-            placeholder="Введите текст"
-            style="margin-bottom: 10px"
-          />
+          <el-input v-model="newTextContent" placeholder="Введите текст" style="margin-bottom: 10px" />
 
           <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <el-input-number
-              v-model="newTextSize"
-              :min="8"
-              :max="32"
-              label="Размер"
-              style="flex: 1"
-            />
+            <el-input-number v-model="newTextSize" :min="8" :max="32" label="Размер" style="flex: 1" />
             <el-color-picker v-model="newTextColor" />
           </div>
 
           <el-radio-group v-model="newTextAlignment" style="margin-bottom: 10px">
-            <el-radio-button label="left">Слева</el-radio-button>
-            <el-radio-button label="center">По центру</el-radio-button>
-            <el-radio-button label="right">Справа</el-radio-button>
+            <el-radio-button v-for="option in newTextAlignmentOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </el-radio-button>
           </el-radio-group>
 
-          <el-button
-            type="primary"
-            @click="handleAddText"
-            :disabled="!newTextContent.trim()"
-            style="width: 100%"
-          >
+          <el-button type="primary" @click="handleAddText" :disabled="!newTextContent.trim()" style="width: 100%">
             Добавить текст
           </el-button>
         </div>
@@ -282,39 +243,21 @@ async function handleSendTextToDevice(text: TextElement) {
         </template>
 
         <div class="text-list">
-          <div
-            v-for="text in localConfig.texts"
-            :key="text.id"
-            class="text-item"
-          >
+          <div v-for="text in localConfig.texts" :key="text.id" class="text-item">
             <div class="text-item-content">
               <span class="text-preview">{{ text.content }}</span>
-              <span class="text-position"
-                >({{ Math.round(text.x) }}, {{ Math.round(text.y) }})</span
-              >
+              <span class="text-position">({{ Math.round(text.x) }}, {{ Math.round(text.y) }})</span>
             </div>
             <div class="text-item-actions">
-              <el-button
-                size="small"
-                @click="handleSendTextToDevice(text)"
-                type="success"
-              >
+              <el-button size="small" @click="handleSendTextToDevice(text)" type="success">
                 Отправить
               </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                @click="handleRemoveText(text.id)"
-              >
+              <el-button size="small" type="danger" @click="handleRemoveText(text.id)">
                 Удалить
               </el-button>
             </div>
           </div>
-          <el-empty
-            v-if="localConfig.texts.length === 0"
-            description="Нет текстовых элементов"
-            :image-size="60"
-          />
+          <el-empty v-if="localConfig.texts.length === 0" description="Нет текстовых элементов" :image-size="60" />
         </div>
       </el-card>
     </div>
@@ -325,11 +268,7 @@ async function handleSendTextToDevice(text: TextElement) {
           <span>Предпросмотр экрана {{ config.screenIndex + 1 }}</span>
         </template>
         <div class="preview-container">
-          <ScreenPreview
-            :config="localConfig"
-            :scale="400"
-            @update:text-position="handleUpdateTextPosition"
-          />
+          <ScreenPreview :config="localConfig" :scale="400" @update:text-position="handleUpdateTextPosition" />
         </div>
       </el-card>
     </div>
