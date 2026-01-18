@@ -5,6 +5,7 @@ use serde_json::Number;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
@@ -460,9 +461,24 @@ async fn set_screen_text(
     Ok(())
 }
 
+#[cfg(debug_assertions)]
+fn setup_devtools(app: &tauri::App) {
+    let main_window = app.get_webview_window("main").unwrap();
+    main_window.open_devtools();
+}
+
+#[cfg(not(debug_assertions))]
+fn setup_devtools(_app: &tauri::App) {
+    // Ничего не делать в production
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            setup_devtools(app);
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
