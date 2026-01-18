@@ -61,6 +61,8 @@ watch(
 );
 
 function handleTextMouseDown(e: MouseEvent, text: TextElement) {
+  e.preventDefault();
+
   if (!previewRef.value) return;
 
   const rect = previewRef.value.getBoundingClientRect();
@@ -73,8 +75,6 @@ function handleTextMouseDown(e: MouseEvent, text: TextElement) {
   };
 
   draggedTextId.value = text.id;
-
-  e.preventDefault();
 }
 
 function handleMouseMove(e: MouseEvent) {
@@ -103,41 +103,26 @@ if (typeof window !== 'undefined') {
 </script>
 
 <template>
-  <div
-    ref="previewRef"
-    class="screen-preview"
-    :style="{
-      width: `${previewSize}px`,
-      height: `${previewSize}px`,
-    }"
-  >
+  <div ref="previewRef" class="screen-preview" :style="{
+    width: `${previewSize}px`,
+    height: `${previewSize}px`,
+  }">
     <div class="preview-background">
       <div class="grid-overlay"></div>
-      <img
-        v-if="imageUrl"
-        :src="imageUrl"
-        alt="Screen preview"
-        class="preview-image"
-      />
+      <img v-if="imageUrl" :src="imageUrl" alt="Screen preview" class="preview-image" />
       <div v-else class="empty-background">
         <span>128×128</span>
       </div>
     </div>
 
-    <div
-      v-for="text in config.texts"
-      :key="text.id"
-      class="text-element"
-      :style="{
-        left: `${text.x * scaleFactor}px`,
-        top: `${text.y * scaleFactor}px`,
-        fontSize: `${(text.fontSize || 16) * scaleFactor}px`,
-        color: text.color || '#ffffff',
-        textAlign: text.alignment || 'left',
-        cursor: 'move',
-      }"
-      @mousedown="handleTextMouseDown($event, text)"
-    >
+    <div v-for="text in config.texts" :key="text.id" class="text-element" :style="{
+      left: `${text.x * scaleFactor}px`,
+      top: `${text.y * scaleFactor}px`,
+      fontSize: `${(text.fontSize || 16) * scaleFactor}px`,
+      color: text.color || '#ffffff',
+      textAlign: text.alignment || 'left',
+      cursor: 'move',
+    }" @mousedown="handleTextMouseDown($event, text)">
       {{ text.content }}
     </div>
   </div>
@@ -167,10 +152,8 @@ if (typeof window !== 'undefined') {
   position: absolute;
   width: 100%;
   height: 100%;
-  background-image: linear-gradient(
-      rgba(255, 255, 255, 0.1) 1px,
-      transparent 1px
-    ),
+  background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px,
+      transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
   background-size: 32px 32px;
   pointer-events: none;
@@ -180,7 +163,6 @@ if (typeof window !== 'undefined') {
 .preview-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
   position: relative;
   z-index: 1;
 }
