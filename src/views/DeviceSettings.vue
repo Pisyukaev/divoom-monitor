@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { ArrowLeft, Refresh, WindPower } from '@element-plus/icons-vue';
+import { ArrowLeft, Refresh, SwitchButton } from '@element-plus/icons-vue';
 
 import { invokeCommand } from '../api/times-gate';
 import { commands } from '../constants';
@@ -123,10 +123,12 @@ onMounted(() => {
         <template #header>
           <div class="card-header">
             <span>Текущие настройки</span>
-            <el-button :icon="Refresh" :loading="isLoadingSettings" @click="handleUpdateSettings" size="small" circle
-              :title="'Обновить настройки'" />
-            <el-button :icon="WindPower" :loading="isLoadingSettings" @click="handleRebootDevice" size="small" circle
-              :title="'Перезагрузить устройство'" />
+            <div class="card-header-icons">
+              <el-button :icon="Refresh" :loading="isLoadingSettings" @click="handleUpdateSettings" size="small" circle
+                :title="'Обновить настройки'" />
+              <el-button :icon="SwitchButton" :loading="isLoadingSettings" @click="handleRebootDevice" size="small"
+                circle :title="'Перезагрузить устройство'" />
+            </div>
           </div>
         </template>
 
@@ -245,6 +247,10 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header-icons {
+  display: flex;
 }
 
 .setting-value {
