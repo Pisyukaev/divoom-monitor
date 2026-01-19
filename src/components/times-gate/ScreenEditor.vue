@@ -6,6 +6,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
 import type { ScreenConfig, TextElement } from '../../types/screen';
 
+const MAX_TEXT_ID = 20
+
 const props = defineProps<{
   config: ScreenConfig;
   deviceIp: string;
@@ -21,6 +23,7 @@ const newTextContent = ref('');
 const newTextColor = ref('#FFFFFF');
 const newTextSize = ref(16);
 const newTextAlignment = ref<0 | 1 | 2 | 3 | 4>(0);
+const textId = ref(0)
 const newTextAlignmentOptions = [
   { label: 'Scroll', value: 0 as const },
   { label: 'Normal', value: 1 as const },
@@ -34,8 +37,8 @@ const localConfig = computed({
   set: (value) => emit('update:config', value),
 });
 
-function generateTextId(): string {
-  return `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+function generateTextId() {
+  return textId.value++
 }
 
 async function handleLoadLocalImage() {
@@ -146,14 +149,14 @@ function handleAddText() {
   ElMessage.success('Текст добавлен');
 }
 
-function handleRemoveText(textId: string) {
+function handleRemoveText(textId: number) {
   localConfig.value = {
     ...localConfig.value,
     texts: localConfig.value.texts.filter((t) => t.id !== textId),
   };
 }
 
-function handleUpdateTextPosition(textId: string, x: number, y: number) {
+function handleUpdateTextPosition(textId: number, x: number, y: number) {
   localConfig.value = {
     ...localConfig.value,
     texts: localConfig.value.texts.map((t) =>
@@ -168,6 +171,7 @@ async function handleSendTextToDevice(text: TextElement) {
       ipAddress: props.deviceIp,
       screenIndex: props.config.screenIndex,
       textConfig: {
+        id: text.id,
         content: text.content,
         x: text.x,
         y: text.y,
@@ -221,7 +225,6 @@ async function handleSendTextToDevice(text: TextElement) {
           <el-input v-model="newTextContent" placeholder="Введите текст" style="margin-bottom: 10px" />
 
           <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <el-input-number v-model="newTextSize" :min="8" :max="32" label="Размер" style="flex: 1" />
             <el-color-picker v-model="newTextColor" />
           </div>
 
@@ -231,7 +234,8 @@ async function handleSendTextToDevice(text: TextElement) {
             </el-radio-button>
           </el-radio-group>
 
-          <el-button type="primary" @click="handleAddText" :disabled="!newTextContent.trim()" style="width: 100%">
+          <el-button type="primary" @click="handleAddText" :disabled="!newTextContent.trim() || textId >= 20"
+            style="width: 100%">
             Добавить текст
           </el-button>
         </div>

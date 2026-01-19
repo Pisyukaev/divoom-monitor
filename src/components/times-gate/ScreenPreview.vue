@@ -9,8 +9,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  'update:text-position': [textId: string, x: number, y: number];
-  'text-click': [textId: string];
+  'update:text-position': [textId: number, x: number, y: number];
+  'text-click': [textId: number];
 }>();
 
 const previewSize = computed(() => props.scale || 400);
@@ -18,7 +18,7 @@ const actualSize = 128;
 const scaleFactor = computed(() => previewSize.value / actualSize);
 
 const previewRef = ref<HTMLDivElement | null>(null);
-const draggedTextId = ref<string | null>(null);
+const draggedTextId = ref<number | null>(null);
 const dragOffset = ref({ x: 0, y: 0 });
 const imageDataUrl = ref<string | null>(null);
 
@@ -118,7 +118,7 @@ if (typeof window !== 'undefined') {
     <div v-for="text in config.texts" :key="text.id" class="text-element" :style="{
       left: `${text.x * scaleFactor}px`,
       top: `${text.y * scaleFactor}px`,
-      fontSize: `${(text.fontSize || 16) * scaleFactor}px`,
+      fontSize: `${(12) * scaleFactor}px`,
       color: text.color || '#ffffff',
       textAlign: text.alignment || 'left',
       cursor: 'move',

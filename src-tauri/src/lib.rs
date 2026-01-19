@@ -451,7 +451,7 @@ async fn set_screen_text(
     let color = text_config
         .color
         .unwrap_or_else(|| "255,255,255".to_string());
-    let font_size = text_config.font_size.unwrap_or(16);
+    let font_size = text_config.font_size.unwrap_or(7);
     let alignment = text_config.alignment.unwrap_or(0);
 
     send_command(

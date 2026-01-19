@@ -110,6 +110,7 @@ async function handleSendAllToDevice() {
             ipAddress: props.deviceIp,
             screenIndex: i,
             textConfig: {
+              id: text.id,
               content: text.content,
               x: text.x,
               y: text.y,
