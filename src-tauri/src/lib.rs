@@ -49,6 +49,7 @@ pub struct DeviceSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextConfig {
+    pub id: u8,
     pub content: String,
     pub x: u8,
     pub y: u8,
@@ -457,7 +458,8 @@ async fn set_screen_text(
         &ip_address,
         &serde_json::json!({
             "Command": "Draw/SendHttpText",
-            "TextId": screen_index,
+            "LcdIndex": screen_index,
+            "TextId": text_config.id,
             "x": text_config.x,
             "y": text_config.y,
             "dir": 0,

@@ -1,5 +1,5 @@
 export interface TextElement {
-  id: string;
+  id: number;
   content: string;
   x: number;
   y: number;
