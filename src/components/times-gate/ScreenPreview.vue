@@ -63,7 +63,9 @@ watch(
 function handleTextMouseDown(e: MouseEvent, text: TextElement) {
   e.preventDefault();
 
-  if (!previewRef.value) return;
+  if (!previewRef.value) {
+    return;
+  }
 
   const rect = previewRef.value.getBoundingClientRect();
   const textX = text.x * scaleFactor.value;
@@ -78,7 +80,9 @@ function handleTextMouseDown(e: MouseEvent, text: TextElement) {
 }
 
 function handleMouseMove(e: MouseEvent) {
-  if (!draggedTextId.value || !previewRef.value) return;
+  if (draggedTextId.value === null || !previewRef.value) {
+    return;
+  }
 
   const rect = previewRef.value.getBoundingClientRect();
   const newX = (e.clientX - rect.left - dragOffset.value.x) / scaleFactor.value;
