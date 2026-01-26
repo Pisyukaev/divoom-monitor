@@ -33,37 +33,19 @@ onMounted(() => {
 <template>
   <div class="container">
     <div class="controls">
-      <el-button
-        type="primary"
-        :icon="Search"
-        :loading="isScanning"
-        @click="scan"
-        size="large"
-      >
+      <el-button type="primary" :icon="Search" :loading="isScanning" @click="scan" size="large">
         {{ isScanning ? 'Сканирование...' : 'Сканировать устройства' }}
       </el-button>
     </div>
 
-    <el-alert
-      v-if="error"
-      :title="error"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 20px"
-    />
+    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon style="margin-bottom: 20px" />
 
-    <el-empty
-      v-if="devices.length === 0 && !isScanning"
-      description="Устройства не найдены. Нажмите 'Сканировать устройства' для поиска."
-    />
+    <el-empty v-if="devices.length === 0 && !isScanning"
+      description="Устройства не найдены. Нажмите 'Сканировать устройства' для поиска." />
 
     <div class="devices-grid">
-      <DeviceCard
-        v-for="device in devices"
-        :key="device.ip_address || device.mac_address || device.name"
-        :device="device"
-      />
+      <DeviceCard v-for="device in devices" :key="device.ip_address || device.mac_address || device.name"
+        :device="device" />
     </div>
   </div>
 </template>

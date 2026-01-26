@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router';
+import { onMounted } from 'vue';
+import { RouterView, useRoute } from 'vue-router';
 import ThemeToggle from './components/ThemeToggle.vue';
+
+const route = useRoute();
+
+onMounted(() => {
+  console.log('App mounted, current route:', route.path, route.name);
+});
 </script>
 
 <template>
@@ -9,7 +16,12 @@ import ThemeToggle from './components/ThemeToggle.vue';
       <h1>Divoom Device Monitor</h1>
       <ThemeToggle />
     </header>
-    <RouterView />
+    <RouterView v-slot="{ Component, route: currentRoute }">
+      <component :is="Component" v-if="Component" :key="currentRoute.path" />
+      <div v-else class="no-route">
+        <p>Маршрут не найден: {{ currentRoute.path }}</p>
+      </div>
+    </RouterView>
   </div>
 </template>
 
@@ -50,6 +62,12 @@ body {
   flex-direction: column;
 }
 
+.app-container> :deep(div) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-header {
   display: flex;
   justify-content: center;
@@ -65,6 +83,12 @@ body {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.no-route {
+  padding: 40px;
+  text-align: center;
   color: var(--el-text-color-primary);
 }
 </style>
