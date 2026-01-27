@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { Search } from '@element-plus/icons-vue';
 
+import Header from '../Header.vue';
 import { scanDevices } from '../../api/common';
 import type { DivoomDevice } from '../../types/device';
 
@@ -31,6 +32,7 @@ onMounted(() => {
 </script>
 
 <template>
+  <Header />
   <div class="container">
     <div class="controls">
       <el-button type="primary" :icon="Search" :loading="isScanning" @click="scan" size="large">
