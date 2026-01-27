@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import DeviceSettingsLayout from '../components/DeviceSettingsLayout.vue';
+import SettingsLayout from '../components/SettingsLayout.vue';
 
 const route = useRoute();
 
@@ -11,14 +11,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <DeviceSettingsLayout>
+  <SettingsLayout>
     <router-view v-slot="{ Component }">
       <component :is="Component" v-if="Component" />
       <div v-else class="loading-placeholder">
         <p>Загрузка...</p>
       </div>
     </router-view>
-  </DeviceSettingsLayout>
+  </SettingsLayout>
 </template>
 
 <style scoped>

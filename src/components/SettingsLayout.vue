@@ -18,7 +18,6 @@ const sidebarWidth = ref(250);
 const isCollapsed = ref(false);
 const isResizing = ref(false);
 
-// Предоставляем deviceInfo дочерним компонентам через provide
 provide('deviceInfo', deviceInfo);
 
 const MIN_SIDEBAR_WIDTH = 200;
@@ -37,7 +36,6 @@ const deviceIp = computed(() => {
   return deviceInfo.value?.ip_address || '';
 });
 
-// Определяем активный пункт меню на основе текущего пути
 const activeMenu = computed(() => {
   const path = route.path;
   if (path.includes('/common')) {
@@ -70,11 +68,7 @@ async function loadDeviceInfo() {
 }
 
 function handleMenuSelect(key: string) {
-  if (key === 'common') {
-    router.push(`/device/${deviceId.value}/common`);
-  } else if (key === 'display') {
-    router.push(`/device/${deviceId.value}/display`);
-  }
+  router.push(key);
 }
 
 function handleUpdateSettings() {
@@ -106,7 +100,7 @@ function startResize(e: MouseEvent) {
 
 function handleResize(e: MouseEvent) {
   if (!isResizing.value) return;
-  
+
   const newWidth = e.clientX;
   if (newWidth >= MIN_SIDEBAR_WIDTH && newWidth <= MAX_SIDEBAR_WIDTH) {
     sidebarWidth.value = newWidth;
@@ -123,13 +117,13 @@ onMounted(() => {
   if (savedWidth) {
     sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
   }
-  
+
   // Загружаем данные при монтировании
   if (route.params.id) {
     handleUpdateSettings();
     loadDeviceInfo();
   }
-  
+
   document.addEventListener('mousemove', handleResize);
   document.addEventListener('mouseup', stopResize);
 });
@@ -156,49 +150,35 @@ watch(
 <template>
   <div class="device-settings-container">
     <!-- Боковая панель -->
-    <aside 
-      class="sidebar" 
-      :class="{ collapsed: isCollapsed }"
-      :style="{ width: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }"
-    >
+    <aside class="sidebar" :class="{ collapsed: isCollapsed }"
+      :style="{ width: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="sidebar-header">
         <h3 v-if="!isCollapsed">{{ deviceInfo ? deviceInfo.name : 'Настройки' }}</h3>
-        <el-button 
-          :icon="isCollapsed ? Expand : Fold" 
-          @click="toggleSidebar"
-          circle
-          size="small"
-          class="collapse-button"
-        />
+        <el-button :icon="isCollapsed ? Expand : Fold" @click="toggleSidebar" circle size="small"
+          class="collapse-button" />
       </div>
-      
-      <el-menu 
-        :default-active="activeMenu"
-        @select="handleMenuSelect" 
-        class="settings-menu"
-        :collapse="isCollapsed"
-      >
+
+      <el-menu :default-active="activeMenu" @select="handleMenuSelect" class="settings-menu" :collapse="isCollapsed">
         <el-menu-item index="common">
-          <el-icon><Setting /></el-icon>
+          <el-icon>
+            <Setting />
+          </el-icon>
           <template #title>
             <span>Общие настройки</span>
           </template>
         </el-menu-item>
         <el-menu-item v-if="isTimesGate && deviceIp" index="display">
-          <el-icon><Monitor /></el-icon>
+          <el-icon>
+            <Monitor />
+          </el-icon>
           <template #title>
             <span>Настройки экранов</span>
           </template>
         </el-menu-item>
       </el-menu>
-      
+
       <!-- Разделитель для ресайза -->
-      <div 
-        v-if="!isCollapsed"
-        class="resize-handle" 
-        @mousedown="startResize"
-        :class="{ resizing: isResizing }"
-      ></div>
+      <div v-if="!isCollapsed" class="resize-handle" @mousedown="startResize" :class="{ resizing: isResizing }"></div>
     </aside>
 
     <!-- Основной контент -->
