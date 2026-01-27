@@ -1,16 +1,21 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { Search } from '@element-plus/icons-vue';
 
-import Header from '../Header.vue';
 import { scanDevices } from '../../api/common';
+import Header from '../Header.vue';
+import DeviceCard from './device-card.vue';
 import type { DivoomDevice } from '../../types/device';
 
-import DeviceCard from './device-card.vue';
+
+const router = useRouter();
 
 const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
 const error = ref<string | null>(null);
+const selectedDevice = ref<DivoomDevice | null>(null)
+
 
 async function scan() {
   isScanning.value = true;
@@ -24,6 +29,12 @@ async function scan() {
   } finally {
     isScanning.value = false;
   }
+}
+
+
+function handleCardClick(device: DivoomDevice) {
+  selectedDevice.value = device
+  router.push(`/device/${device.ip_address}`);
 }
 
 onMounted(() => {
@@ -47,7 +58,7 @@ onMounted(() => {
 
     <div class="devices-grid">
       <DeviceCard v-for="device in devices" :key="device.ip_address || device.mac_address || device.name"
-        :device="device" />
+        :device="device" :onClick="() => handleCardClick(device)" />
     </div>
   </div>
 </template>

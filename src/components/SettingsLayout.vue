@@ -4,22 +4,18 @@ import { useRouter, useRoute } from 'vue-router';
 import { ArrowLeft, Setting, Monitor, Fold, Expand } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
-import { scanDevices } from '../api/common';
-import type { DivoomDevice } from '../types/device';
 import ThemeToggle from './ThemeToggle.vue';
 
 const router = useRouter();
 const route = useRoute();
-const { fetchDeviceSettings } = useDevice();
+const { settings } = useDevice();
 
-const deviceId = computed(() => route.params.id as string);
-const deviceInfo = ref<DivoomDevice | null>(null);
-const isLoadingDevice = ref(false);
+
 const sidebarWidth = ref(250);
 const isCollapsed = ref(false);
 const isResizing = ref(false);
 
-provide('deviceInfo', deviceInfo);
+provide('settings', settings)
 
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 500;
@@ -35,34 +31,10 @@ const activeMenu = computed(() => {
   return 'common';
 });
 
-async function loadDeviceInfo() {
-  try {
-    isLoadingDevice.value = true;
-    const devices = await scanDevices();
-    const decodedId = decodeURIComponent(deviceId.value);
-    const foundDevice = devices.find(
-      (d) =>
-        d.ip_address === decodedId ||
-        d.mac_address === decodedId ||
-        d.name === decodedId
-    );
-    if (foundDevice) {
-      deviceInfo.value = foundDevice;
-    }
-  } catch (error) {
-    console.error('Error loading device info:', error);
-  } finally {
-    isLoadingDevice.value = false;
-  }
-}
-
 function handleMenuSelect(key: string) {
   router.push(key);
 }
 
-function handleUpdateSettings() {
-  fetchDeviceSettings(deviceId.value);
-}
 
 function goBack() {
   router.push('/');
@@ -102,16 +74,12 @@ function stopResize() {
 }
 
 onMounted(() => {
+  console.log('onMounted')
   const savedWidth = localStorage.getItem('sidebarWidth');
   if (savedWidth) {
     sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
   }
 
-  // Загружаем данные при монтировании
-  if (route.params.id) {
-    handleUpdateSettings();
-    loadDeviceInfo();
-  }
 
   document.addEventListener('mousemove', handleResize);
   document.addEventListener('mouseup', stopResize);
@@ -121,19 +89,6 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', handleResize);
   document.removeEventListener('mouseup', stopResize);
 });
-
-// Отслеживаем только изменение deviceId, а не route.name
-// Это предотвращает повторные запросы при переключении между роутами одного устройства
-watch(
-  () => route.params.id,
-  (newId: string | string[], oldId: string | string[] | undefined) => {
-    // Загружаем данные только если deviceId действительно изменился
-    if (newId && newId !== oldId) {
-      handleUpdateSettings();
-      loadDeviceInfo();
-    }
-  }
-);
 </script>
 
 <template>
@@ -142,7 +97,7 @@ watch(
     <aside class="sidebar" :class="{ collapsed: isCollapsed }"
       :style="{ width: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="sidebar-header">
-        <h3 v-if="!isCollapsed">{{ deviceInfo ? deviceInfo.name : 'Настройки' }}</h3>
+        <h3 v-if="!isCollapsed">{{ 'Настройки' }}</h3>
         <el-button :icon="isCollapsed ? Expand : Fold" @click="toggleSidebar" circle size="small"
           class="collapse-button" />
       </div>
@@ -174,7 +129,7 @@ watch(
     <main class="main-content" :style="{ left: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="content-header">
         <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
-        <h2>{{ deviceInfo ? deviceInfo.name : 'Настройки устройства' }}</h2>
+        <h2>{{ 'Настройки устройства' }}</h2>
         <ThemeToggle />
       </div>
 

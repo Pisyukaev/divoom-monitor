@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
 import type { DivoomDevice } from '../../types/device';
 
 const props = defineProps<{
   device: DivoomDevice;
+  onClick: () => void
 }>();
 
-const router = useRouter();
+
 
 function getSignalBarActive(
   barIndex: number,
@@ -18,28 +18,13 @@ function getSignalBarActive(
   const threshold = -30 - barIndex * 20;
   return signalStrength >= threshold;
 }
-
-function getDeviceId(device: DivoomDevice): string {
-  return encodeURIComponent(
-    device.ip_address || device.mac_address || device.name
-  );
-}
-
-function handleCardClick() {
-  const deviceId = getDeviceId(props.device);
-  router.push(`/device/${deviceId}`);
-}
 </script>
 
 <template>
-  <el-card
-    :shadow="device.is_connected ? 'always' : 'hover'"
-    :class="{
-      'device-card-connected': device.is_connected,
-      'device-card-clickable': true,
-    }"
-    @click="handleCardClick"
-  >
+  <el-card :shadow="device.is_connected ? 'always' : 'hover'" :class="{
+    'device-card-connected': device.is_connected,
+    'device-card-clickable': true,
+  }" @click="onClick">
     <template #header>
       <div class="device-header">
         <h3 class="device-name">{{ device.name }}</h3>
@@ -66,21 +51,13 @@ function handleCardClick() {
         <el-text>{{ device.device_id }}</el-text>
       </el-descriptions-item>
 
-      <el-descriptions-item
-        v-if="device.signal_strength !== null"
-        label="Уровень сигнала"
-      >
+      <el-descriptions-item v-if="device.signal_strength !== null" label="Уровень сигнала">
         <div class="signal-indicator">
           <el-text>{{ device.signal_strength }} dBm</el-text>
           <div class="signal-bars">
-            <div
-              v-for="i in 4"
-              :key="i"
-              class="signal-bar"
-              :class="{
-                active: getSignalBarActive(i, device.signal_strength),
-              }"
-            ></div>
+            <div v-for="i in 4" :key="i" class="signal-bar" :class="{
+              active: getSignalBarActive(i, device.signal_strength),
+            }"></div>
           </div>
         </div>
       </el-descriptions-item>

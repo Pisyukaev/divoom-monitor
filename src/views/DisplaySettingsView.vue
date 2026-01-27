@@ -1,41 +1,27 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import ScreenSettings from '../components/settings/screen-settings.vue';
-import type { DivoomDevice } from '../types/device';
 
 const route = useRoute();
 
 const deviceId = computed(() => route.params.id as string);
-const deviceInfo = inject<{ value: DivoomDevice | null }>('deviceInfo');
 
 const deviceIp = computed(() => {
   const decodedId = decodeURIComponent(deviceId.value);
   if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
     return decodedId;
   }
-  return deviceInfo?.value?.ip_address || '';
+  return '';
 });
 
-const isTimesGate = computed(() => {
-  return deviceInfo?.value?.device_type === 'Times Gate';
-});
 </script>
 
 <template>
   <div class="screens-content">
-    <ScreenSettings 
-      v-if="isTimesGate && deviceIp" 
-      :device-id="deviceId" 
-      :device-ip="deviceIp" 
-    />
-    <el-alert
-      v-else
-      title="Настройки экранов доступны только для устройств Times Gate"
-      type="info"
-      :closable="false"
-      show-icon
-    />
+    <ScreenSettings v-if="deviceId && deviceIp" :device-id="deviceId" :device-ip="deviceIp" />
+    <el-alert v-else title="Настройки экранов доступны только для устройств Times Gate" type="info" :closable="false"
+      show-icon />
   </div>
 </template>
 
