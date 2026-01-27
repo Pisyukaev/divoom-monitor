@@ -6,6 +6,7 @@ import { ArrowLeft, Setting, Monitor, Fold, Expand } from '@element-plus/icons-v
 import { useDevice } from '../composables/useDevice';
 import { scanDevices } from '../api/common';
 import type { DivoomDevice } from '../types/device';
+import ThemeToggle from './ThemeToggle.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -23,18 +24,6 @@ provide('deviceInfo', deviceInfo);
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 500;
 const COLLAPSED_WIDTH = 60;
-
-const isTimesGate = computed(() => {
-  return deviceInfo.value?.device_type === 'Times Gate';
-});
-
-const deviceIp = computed(() => {
-  const decodedId = decodeURIComponent(deviceId.value);
-  if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-    return decodedId;
-  }
-  return deviceInfo.value?.ip_address || '';
-});
 
 const activeMenu = computed(() => {
   const path = route.path;
@@ -160,18 +149,18 @@ watch(
 
       <el-menu :default-active="activeMenu" @select="handleMenuSelect" class="settings-menu" :collapse="isCollapsed">
         <el-menu-item index="common">
-          <el-icon>
-            <Setting />
-          </el-icon>
           <template #title>
+            <el-icon>
+              <Setting />
+            </el-icon>
             <span>Общие настройки</span>
           </template>
         </el-menu-item>
-        <el-menu-item v-if="isTimesGate && deviceIp" index="display">
-          <el-icon>
-            <Monitor />
-          </el-icon>
+        <el-menu-item index="display">
           <template #title>
+            <el-icon>
+              <Monitor />
+            </el-icon>
             <span>Настройки экранов</span>
           </template>
         </el-menu-item>
@@ -186,6 +175,7 @@ watch(
       <div class="content-header">
         <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
         <h2>{{ deviceInfo ? deviceInfo.name : 'Настройки устройства' }}</h2>
+        <ThemeToggle />
       </div>
 
       <div class="content-area">
@@ -208,8 +198,8 @@ watch(
 .sidebar {
   position: fixed;
   left: 0;
-  top: 80px;
-  height: calc(100vh - 80px);
+  top: 0;
+  height: 100vh;
   background-color: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color);
   display: flex;
@@ -273,7 +263,7 @@ watch(
 
 .main-content {
   position: fixed;
-  top: 80px;
+  top: 0;
   right: 0;
   bottom: 0;
   left: 0;
@@ -288,7 +278,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 20px;
+  padding-left: 20px;
   background-color: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color);
   flex-shrink: 0;
@@ -299,9 +289,6 @@ watch(
 }
 
 .content-header h2 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
@@ -309,18 +296,5 @@ watch(
   flex: 1;
   padding: 20px;
   overflow-y: auto;
-}
-
-:deep(.el-menu-item) {
-  height: 50px;
-  line-height: 50px;
-}
-
-:deep(.el-menu-item span) {
-  margin-left: 8px;
-}
-
-:deep(.el-menu--collapse .el-menu-item span) {
-  display: none;
 }
 </style>
