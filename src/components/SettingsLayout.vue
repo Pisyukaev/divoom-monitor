@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onUnmounted, provide } from 'vue';
+import { ref, onMounted, computed, onUnmounted, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ArrowLeft, Setting, Monitor, Fold, Expand } from '@element-plus/icons-vue';
 
@@ -32,7 +32,9 @@ const activeMenu = computed(() => {
 });
 
 function handleMenuSelect(key: string) {
-  router.push(key);
+  // Используем текущий путь устройства и добавляем нужный подпуть
+  const deviceId = route.params.id;
+  router.push(`/device/${deviceId}/${key}`);
 }
 
 
@@ -54,27 +56,32 @@ function toggleSidebar() {
   }
 }
 
-function startResize(e: MouseEvent) {
+function startResize() {
   isResizing.value = true;
-  e.preventDefault();
 }
 
 function handleResize(e: MouseEvent) {
-  if (!isResizing.value) return;
+  if (!isResizing.value) {
+    return;
+  }
+
 
   const newWidth = e.clientX;
   if (newWidth >= MIN_SIDEBAR_WIDTH && newWidth <= MAX_SIDEBAR_WIDTH) {
     sidebarWidth.value = newWidth;
-    localStorage.setItem('sidebarWidth', newWidth.toString());
   }
 }
 
 function stopResize() {
+  if (!isResizing.value) {
+    return;
+  }
+
   isResizing.value = false;
+  localStorage.setItem('sidebarWidth', sidebarWidth.value.toString());
 }
 
 onMounted(() => {
-  console.log('onMounted')
   const savedWidth = localStorage.getItem('sidebarWidth');
   if (savedWidth) {
     sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
@@ -94,7 +101,7 @@ onUnmounted(() => {
 <template>
   <div class="device-settings-container">
     <!-- Боковая панель -->
-    <aside class="sidebar" :class="{ collapsed: isCollapsed }"
+    <aside class="sidebar" :class="{ collapsed: isCollapsed, resizing: isResizing }"
       :style="{ width: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="sidebar-header">
         <h3 v-if="!isCollapsed">{{ 'Настройки' }}</h3>
@@ -126,7 +133,8 @@ onUnmounted(() => {
     </aside>
 
     <!-- Основной контент -->
-    <main class="main-content" :style="{ left: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
+    <main class="main-content" :class="{ resizing: isResizing }"
+      :style="{ left: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="content-header">
         <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
         <h2>{{ 'Настройки устройства' }}</h2>
@@ -162,6 +170,12 @@ onUnmounted(() => {
   transition: width 0.3s ease;
   z-index: 1000;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.resizing {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
 }
 
 .sidebar-header {
@@ -227,6 +241,10 @@ onUnmounted(() => {
   transition: left 0.3s ease;
   overflow: hidden;
   background-color: var(--el-bg-color-page);
+}
+
+.main-content.resizing {
+  transition: none;
 }
 
 .content-header {
