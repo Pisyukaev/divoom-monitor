@@ -104,18 +104,18 @@ onUnmounted(() => {
 
       <el-menu :default-active="activeMenu" @select="handleMenuSelect" class="settings-menu" :collapse="isCollapsed">
         <el-menu-item index="common">
+          <el-icon>
+            <Setting />
+          </el-icon>
           <template #title>
-            <el-icon>
-              <Setting />
-            </el-icon>
             <span>Общие настройки</span>
           </template>
         </el-menu-item>
         <el-menu-item index="display">
+          <el-icon>
+            <Monitor />
+          </el-icon>
           <template #title>
-            <el-icon>
-              <Monitor />
-            </el-icon>
             <span>Настройки экранов</span>
           </template>
         </el-menu-item>
