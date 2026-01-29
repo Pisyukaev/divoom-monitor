@@ -10,16 +10,17 @@ const router = useRouter();
 const route = useRoute();
 const { settings } = useDevice();
 
+const DEFAULT_SIDEBAR_WIDTH = 250
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 500;
+const COLLAPSED_WIDTH = 60;
 
-const sidebarWidth = ref(250);
+const sidebarWidth = ref(DEFAULT_SIDEBAR_WIDTH);
 const isCollapsed = ref(false);
 const isResizing = ref(false);
 
 provide('settings', settings)
 
-const MIN_SIDEBAR_WIDTH = 200;
-const MAX_SIDEBAR_WIDTH = 500;
-const COLLAPSED_WIDTH = 60;
 
 const activeMenu = computed(() => {
   const path = route.path;
