@@ -65,7 +65,6 @@ function handleResize(e: MouseEvent) {
     return;
   }
 
-
   const newWidth = e.clientX;
   if (newWidth >= MIN_SIDEBAR_WIDTH && newWidth <= MAX_SIDEBAR_WIDTH) {
     sidebarWidth.value = newWidth;
@@ -109,7 +108,8 @@ onUnmounted(() => {
           class="collapse-button" />
       </div>
 
-      <el-menu :default-active="activeMenu" @select="handleMenuSelect" class="settings-menu" :collapse="isCollapsed">
+      <el-menu :default-active="activeMenu" @select="handleMenuSelect" class="settings-menu" :collapse="isCollapsed"
+        :collapse-transition="false">
         <el-menu-item index="common">
           <el-icon>
             <Setting />
@@ -167,13 +167,11 @@ onUnmounted(() => {
   border-right: 1px solid var(--el-border-color);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
   z-index: 1000;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
 .resizing {
-  transition: none;
   cursor: col-resize;
   user-select: none;
 }
@@ -238,13 +236,8 @@ onUnmounted(() => {
   left: 0;
   display: flex;
   flex-direction: column;
-  transition: left 0.3s ease;
   overflow: hidden;
   background-color: var(--el-bg-color-page);
-}
-
-.main-content.resizing {
-  transition: none;
 }
 
 .content-header {
