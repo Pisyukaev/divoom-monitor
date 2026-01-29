@@ -10,10 +10,6 @@ const props = defineProps<{
   deviceIp: string;
 }>();
 
-const emit = defineEmits<{
-  'config-changed': [configs: ScreenConfigs];
-}>();
-
 const activeTab = ref('0');
 const screenConfigs = ref<ScreenConfigs>({});
 
@@ -58,7 +54,6 @@ function saveConfigs() {
       `screen_configs_${props.deviceId}`,
       JSON.stringify(screenConfigs.value)
     );
-    emit('config-changed', screenConfigs.value);
     ElMessage.success('Конфигурация сохранена');
   } catch (error) {
     console.error('Error saving configs:', error);
