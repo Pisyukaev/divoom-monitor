@@ -56,6 +56,7 @@ pub struct TextConfig {
     pub font_size: Option<u8>,
     pub color: Option<String>,
     pub alignment: Option<u8>,
+    pub text_width: Option<u8>,
 }
 
 async fn send_command(ip: &str, command: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -453,6 +454,7 @@ async fn set_screen_text(
         .unwrap_or_else(|| "255,255,255".to_string());
     let font_size = text_config.font_size.unwrap_or(7);
     let alignment = text_config.alignment.unwrap_or(0);
+    let text_width = text_config.text_width.unwrap_or(64);
 
     send_command(
         &ip_address,
@@ -464,7 +466,7 @@ async fn set_screen_text(
             "y": text_config.y,
             "dir": 0,
             "font": font_size,
-            "TextWidth": 64,
+            "TextWidth": text_width,
             "speed": 100,
             "TextString": text_config.content,
             "color": color,

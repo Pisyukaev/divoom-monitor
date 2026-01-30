@@ -6,6 +6,7 @@ export interface TextElement {
   fontSize?: number;
   color?: string;
   alignment?: 0 | 1 | 2 | 3 | 4;
+  textWidth: number;
 }
 
 export interface ScreenImage {
