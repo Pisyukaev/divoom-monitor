@@ -6,8 +6,6 @@ import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
 import type { ScreenConfig, TextElement } from '../../types/screen';
 
-const MAX_TEXT_ID = 20
-
 const props = defineProps<{
   config: ScreenConfig;
   deviceIp: string;
@@ -23,7 +21,8 @@ const newTextContent = ref('');
 const newTextColor = ref('#FFFFFF');
 const newTextSize = ref(16);
 const newTextAlignment = ref<0 | 1 | 2 | 3 | 4>(0);
-const textId = ref(0)
+const textId = ref(0);
+const selectedText = ref<TextElement | null>(null);
 const newTextAlignmentOptions = [
   { label: 'Scroll', value: 0 as const },
   { label: 'Normal', value: 1 as const },
@@ -138,6 +137,7 @@ function handleAddText() {
     fontSize: newTextSize.value,
     color: newTextColor.value.toUpperCase(),
     alignment: newTextAlignment.value,
+    textWidth: 64,
   };
 
   localConfig.value = {
@@ -150,9 +150,39 @@ function handleAddText() {
 }
 
 function handleRemoveText(textId: number) {
+  if (selectedText.value?.id === textId) {
+    selectedText.value = null;
+  }
+
   localConfig.value = {
     ...localConfig.value,
     texts: localConfig.value.texts.filter((t) => t.id !== textId),
+  };
+}
+
+function handleTextClick(textId: number) {
+  const text = localConfig.value.texts.find((t) => t.id === textId);
+
+  selectedText.value = text || null;
+
+
+}
+
+function handleUpdateSelectedText() {
+  if (selectedText.value === null) {
+    return;
+  }
+
+  localConfig.value = {
+    ...localConfig.value,
+    texts: localConfig.value.texts.map((t) =>
+      t.id === selectedText.value?.id
+        ? {
+          ...t,
+          ...selectedText.value
+        }
+        : t
+    ),
   };
 }
 
@@ -163,6 +193,10 @@ function handleUpdateTextPosition(textId: number, x: number, y: number) {
       t.id === textId ? { ...t, x: Math.round(x), y: Math.round(y) } : t
     ),
   };
+  if (selectedText.value?.id === textId) {
+    selectedText.value.x = Math.round(x);
+    selectedText.value.y = Math.round(y);
+  }
 }
 
 async function handleSendTextToDevice(text: TextElement) {
@@ -178,6 +212,7 @@ async function handleSendTextToDevice(text: TextElement) {
         font_size: text.fontSize,
         color: text.color?.toUpperCase(),
         alignment: text.alignment,
+        text_width: text.textWidth,
       },
     });
     ElMessage.success('Текст отправлен на устройство');
@@ -241,27 +276,47 @@ async function handleSendTextToDevice(text: TextElement) {
         </div>
       </el-card>
 
-      <el-card shadow="hover" style="margin-top: 20px">
+      <el-card v-if="selectedText" shadow="hover" style="margin-top: 20px">
         <template #header>
-          <span>Элементы текста</span>
+          <span>Редактирование текста</span>
         </template>
 
-        <div class="text-list">
-          <div v-for="text in localConfig.texts" :key="text.id" class="text-item">
-            <div class="text-item-content">
-              <span class="text-preview">{{ text.content }}</span>
-              <span class="text-position">({{ Math.round(text.x) }}, {{ Math.round(text.y) }})</span>
-            </div>
-            <div class="text-item-actions">
-              <el-button size="small" @click="handleSendTextToDevice(text)" type="success">
-                Отправить
-              </el-button>
-              <el-button size="small" type="danger" @click="handleRemoveText(text.id)">
-                Удалить
-              </el-button>
-            </div>
+        <div class="control-section">
+          <el-input v-model="selectedText.content" placeholder="Содержимое текста" style="margin-bottom: 10px"
+            @input="handleUpdateSelectedText" />
+
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <el-color-picker v-model="selectedText.color" @change="handleUpdateSelectedText" />
           </div>
-          <el-empty v-if="localConfig.texts.length === 0" description="Нет текстовых элементов" :image-size="60" />
+
+          <el-input-number v-model="selectedText.fontSize" :min="0" :max="7" style="width: 100%; margin-bottom: 10px"
+            @change="handleUpdateSelectedText" />
+          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Тип шрифта</label>
+
+          <el-radio-group v-model="selectedText.alignment" style="margin-bottom: 10px"
+            @change="handleUpdateSelectedText">
+            <el-radio-button v-for="option in newTextAlignmentOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </el-radio-button>
+          </el-radio-group>
+
+          <el-input-number v-model="selectedText.textWidth" :min="16" :max="64" style="width: 100%; margin-bottom: 10px"
+            @change="handleUpdateSelectedText" />
+          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Ширина
+            текста</label>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <el-input-number v-model="selectedText.x" :min="0" :max="128" style="flex: 1"
+              @change="handleUpdateSelectedText" />
+            <el-input-number v-model="selectedText.y" :min="0" :max="128" style="flex: 1"
+              @change="handleUpdateSelectedText" />
+          </div>
+          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Позиция (X,
+            Y)</label>
+
+          <el-button type="success" @click="handleSendTextToDevice(selectedText)" style="width: 100%; margin-top: 10px">
+            Отправить на устройство
+          </el-button>
         </div>
       </el-card>
     </div>
@@ -272,7 +327,9 @@ async function handleSendTextToDevice(text: TextElement) {
           <span>Предпросмотр экрана {{ config.screenIndex + 1 }}</span>
         </template>
         <div class="preview-container">
-          <ScreenPreview :config="localConfig" :scale="400" @update:text-position="handleUpdateTextPosition" />
+          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText"
+            @update:text-position="handleUpdateTextPosition" @text-delete="handleRemoveText"
+            @text-click="handleTextClick" />
         </div>
       </el-card>
     </div>
@@ -343,5 +400,19 @@ async function handleSendTextToDevice(text: TextElement) {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.text-item {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.text-item:hover {
+  border-color: var(--el-color-primary);
+}
+
+.text-item-selected {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
 }
 </style>
