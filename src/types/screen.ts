@@ -3,7 +3,7 @@ export interface TextElement {
   content: string;
   x: number;
   y: number;
-  fontSize?: number;
+  font?: number;
   color?: string;
   alignment?: 0 | 1 | 2 | 3 | 4;
   textWidth: number;
