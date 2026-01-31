@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import { RouterView, useRoute } from 'vue-router';
+import { RouterView } from 'vue-router';
+import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
 
-const route = useRoute();
-
-onMounted(() => {
-  console.log('App mounted, current route:', route.path, route.name);
+onMounted(async () => {
+  await sendConfigsToAllDevices();
 });
 </script>
 

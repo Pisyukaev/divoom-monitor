@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onBeforeMount, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { invoke } from '@tauri-apps/api/core';
 import ScreenEditor from './ScreenEditor.vue';
 import { TEXT_IDS } from '../../constants';
+import { sendConfigsToDevice } from '../../composables/useAutoSendConfig';
 import type { ScreenConfig, ScreenConfigs } from '../../types/screen';
 
 const props = defineProps<{
@@ -73,58 +73,7 @@ function handleConfigUpdate(screenIndex: number, config: ScreenConfig) {
 async function handleSendAllToDevice() {
   try {
     ElMessage.info('Отправка всех конфигураций на устройство...');
-
-    // Send images and texts for each screen
-    for (let i = 0; i < 5; i++) {
-      const config = screenConfigs.value[i];
-      if (!config) continue;
-
-      // Send image if present
-      if (config.image) {
-        try {
-          if (config.image.type === 'url') {
-            await invoke('upload_image_from_url', {
-              ipAddress: props.deviceIp,
-              screenIndex: i,
-              url: config.image.source,
-            });
-          } else if (config.image.type === 'local') {
-            await invoke('upload_image_from_file', {
-              ipAddress: props.deviceIp,
-              screenIndex: i,
-              filePath: config.image.source,
-            });
-          }
-        } catch (error) {
-          console.error(`Error sending image for screen ${i}:`, error);
-          ElMessage.warning(`Ошибка отправки изображения для экрана ${i + 1}`);
-        }
-      }
-
-      // Send all texts for this screen
-      for (const text of config.texts) {
-        try {
-          await invoke('set_screen_text', {
-            ipAddress: props.deviceIp,
-            screenIndex: i,
-            textConfig: {
-              id: text.id,
-              content: text.content,
-              x: text.x,
-              y: text.y,
-              font: text.font,
-              color: text.color?.toUpperCase(),
-              alignment: text.alignment,
-              text_width: text.textWidth,
-            },
-          });
-        } catch (error) {
-          console.error(`Error sending text for screen ${i}:`, error);
-          ElMessage.warning(`Ошибка отправки текста для экрана ${i + 1}`);
-        }
-      }
-    }
-
+    await sendConfigsToDevice(props.deviceIp, screenConfigs.value);
     ElMessage.success('Все конфигурации отправлены на устройство');
   } catch (error) {
     console.error('Error sending configs to device:', error);
