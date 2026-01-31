@@ -5,6 +5,7 @@ import type { TextElement as TextElementType } from '../../types/screen';
 
 const props = defineProps<{
   text: TextElementType | null;
+  textIds: number[];
 }>();
 
 const emit = defineEmits<{
@@ -13,9 +14,8 @@ const emit = defineEmits<{
   (e: 'add:text', text: TextElementType): void;
 }>();
 
-const textId = ref(0);
 const newText = ref<TextElementType>({
-  id: textId.value,
+  id: 0,
   content: '',
   x: 0,
   y: 0,
@@ -29,10 +29,6 @@ const currentText = computed(() => {
   return props.text ?? newText.value;
 });
 
-
-function generateTextId() {
-  return textId.value++
-}
 
 
 function handleChangeTextProp<T extends keyof TextElementType,
@@ -53,7 +49,7 @@ function handleSubmitText() {
   if (props.text) {
     emit('submit:text', currentText.value);
   } else {
-    emit('add:text', { ...currentText.value, id: generateTextId() });
+    emit('add:text', { ...currentText.value, id: props.textIds.shift()! });
   }
 }
 
@@ -101,7 +97,8 @@ function handleSubmitText() {
           @change="(y) => handleChangeTextProp('y', y)" />
       </div>
 
-      <el-button type="success" @click="handleSubmitText" class="button">
+      <el-button type="success" @click="handleSubmitText" :disabled="!props.text && props.textIds.length === 0"
+        class="button">
         {{ !props.text ? 'Добавить текст' : 'Отправить на устройство' }}
       </el-button>
     </div>

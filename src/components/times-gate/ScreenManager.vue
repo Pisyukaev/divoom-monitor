@@ -3,6 +3,7 @@ import { ref, onBeforeMount, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import ScreenEditor from './ScreenEditor.vue';
+import { TEXT_IDS } from '../../constants';
 import type { ScreenConfig, ScreenConfigs } from '../../types/screen';
 
 const props = defineProps<{
@@ -20,6 +21,7 @@ function initializeConfigs() {
     configs[i] = {
       screenIndex: i,
       texts: [],
+      textIds: TEXT_IDS,
     };
   }
   return configs;
@@ -36,6 +38,7 @@ function loadConfigs() {
           screenConfigs.value[i] = {
             screenIndex: i,
             texts: [],
+            textIds: TEXT_IDS,
           };
         }
       }

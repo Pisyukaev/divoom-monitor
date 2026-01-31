@@ -112,7 +112,7 @@ function handleRemoveImage() {
 function handleAddText(text: TextElementType) {
   localConfig.value = {
     ...localConfig.value,
-    texts: [...localConfig.value.texts, text],
+    texts: [...localConfig.value.texts, { ...text, color: text.color?.toUpperCase() }],
   };
   handleSendTextToDevice(text);
   ElMessage.success('Текст добавлен');
@@ -127,6 +127,7 @@ function handleRemoveText(textId: number) {
   localConfig.value = {
     ...localConfig.value,
     texts: localConfig.value.texts.filter((t) => t.id !== textId),
+    textIds: [...localConfig.value.textIds, textId],
   };
 
   emit('update:config', localConfig.value);
@@ -228,8 +229,8 @@ async function handleSendTextToDevice(text: TextElementType) {
         </div>
       </el-card>
 
-      <TextElement :text="selectedText" @update:text="handleUpdateSelectedText" @submit:text="handleSendTextToDevice"
-        @add:text="handleAddText" />
+      <TextElement :text="selectedText" :text-ids="config.textIds" @update:text="handleUpdateSelectedText"
+        @submit:text="handleSendTextToDevice" @add:text="handleAddText" />
     </div>
 
     <div class="editor-preview">
@@ -238,7 +239,7 @@ async function handleSendTextToDevice(text: TextElementType) {
           <span>Предпросмотр экрана {{ config.screenIndex + 1 }}</span>
         </template>
         <div class="preview-container">
-          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText"
+          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText" "
             @update:text-position="handleUpdateTextPosition" @text-delete="handleRemoveText"
             @text-click="handleTextClick" />
         </div>
