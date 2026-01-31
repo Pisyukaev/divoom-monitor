@@ -109,9 +109,10 @@ async function handleSendAllToDevice() {
               content: text.content,
               x: text.x,
               y: text.y,
-              font_size: text.fontSize,
-              color: text.color,
+              font: text.font,
+              color: text.color?.toUpperCase(),
               alignment: text.alignment,
+              text_width: text.textWidth,
             },
           });
         } catch (error) {

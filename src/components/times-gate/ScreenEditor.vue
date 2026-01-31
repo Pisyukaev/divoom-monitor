@@ -4,7 +4,8 @@ import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
-import type { ScreenConfig, TextElement } from '../../types/screen';
+import TextElement from './TextElement.vue';
+import type { ScreenConfig, TextElement as TextElementType } from '../../types/screen';
 
 const props = defineProps<{
   config: ScreenConfig;
@@ -17,28 +18,14 @@ const emit = defineEmits<{
 
 const imageUrlInput = ref('');
 const isLoadingImage = ref(false);
-const newTextContent = ref('');
-const newTextColor = ref('#FFFFFF');
-const newTextSize = ref(16);
-const newTextAlignment = ref<0 | 1 | 2 | 3 | 4>(0);
-const textId = ref(0);
-const selectedText = ref<TextElement | null>(null);
-const newTextAlignmentOptions = [
-  { label: 'Scroll', value: 0 as const },
-  { label: 'Normal', value: 1 as const },
-  { label: 'Middle', value: 2 as const },
-  { label: 'Right', value: 3 as const },
-  { label: 'Left', value: 4 as const },
-];
+const selectedText = ref<TextElementType | null>(null);
 
 const localConfig = computed({
   get: () => props.config,
   set: (value) => emit('update:config', value),
 });
 
-function generateTextId() {
-  return textId.value++
-}
+
 
 async function handleLoadLocalImage() {
   try {
@@ -123,29 +110,11 @@ function handleRemoveImage() {
   };
 }
 
-function handleAddText() {
-  if (!newTextContent.value.trim()) {
-    ElMessage.warning('Введите текст');
-    return;
-  }
-
-  const newText: TextElement = {
-    id: generateTextId(),
-    content: newTextContent.value,
-    x: 10,
-    y: 20,
-    fontSize: newTextSize.value,
-    color: newTextColor.value.toUpperCase(),
-    alignment: newTextAlignment.value,
-    textWidth: 64,
-  };
-
+function handleAddText(text: TextElementType) {
   localConfig.value = {
     ...localConfig.value,
-    texts: [...localConfig.value.texts, newText],
+    texts: [...localConfig.value.texts, text],
   };
-
-  newTextContent.value = '';
   ElMessage.success('Текст добавлен');
 }
 
@@ -160,7 +129,12 @@ function handleRemoveText(textId: number) {
   };
 }
 
-function handleTextClick(textId: number) {
+function handleTextClick(textId: number | null) {
+  if (textId === null) {
+    selectedText.value = null;
+    return;
+  }
+
   const text = localConfig.value.texts.find((t) => t.id === textId);
 
   selectedText.value = text || null;
@@ -168,7 +142,7 @@ function handleTextClick(textId: number) {
 
 }
 
-function handleUpdateSelectedText() {
+function handleUpdateSelectedText(text: TextElementType) {
   if (selectedText.value === null) {
     return;
   }
@@ -176,14 +150,14 @@ function handleUpdateSelectedText() {
   localConfig.value = {
     ...localConfig.value,
     texts: localConfig.value.texts.map((t) =>
-      t.id === selectedText.value?.id
+      t.id === text.id
         ? {
           ...t,
-          ...selectedText.value
+          ...text
         }
         : t
     ),
-  };
+  }
 }
 
 function handleUpdateTextPosition(textId: number, x: number, y: number) {
@@ -199,7 +173,7 @@ function handleUpdateTextPosition(textId: number, x: number, y: number) {
   }
 }
 
-async function handleSendTextToDevice(text: TextElement) {
+async function handleSendTextToDevice(text: TextElementType) {
   try {
     await invoke('set_screen_text', {
       ipAddress: props.deviceIp,
@@ -209,7 +183,7 @@ async function handleSendTextToDevice(text: TextElement) {
         content: text.content,
         x: text.x,
         y: text.y,
-        font_size: text.fontSize,
+        font: text.font,
         color: text.color?.toUpperCase(),
         alignment: text.alignment,
         text_width: text.textWidth,
@@ -251,74 +225,8 @@ async function handleSendTextToDevice(text: TextElement) {
         </div>
       </el-card>
 
-      <el-card shadow="hover" style="margin-top: 20px">
-        <template #header>
-          <span>Текст</span>
-        </template>
-
-        <div class="control-section">
-          <el-input v-model="newTextContent" placeholder="Введите текст" style="margin-bottom: 10px" />
-
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <el-color-picker v-model="newTextColor" />
-          </div>
-
-          <el-radio-group v-model="newTextAlignment" style="margin-bottom: 10px">
-            <el-radio-button v-for="option in newTextAlignmentOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </el-radio-button>
-          </el-radio-group>
-
-          <el-button type="primary" @click="handleAddText" :disabled="!newTextContent.trim() || textId >= 20"
-            style="width: 100%">
-            Добавить текст
-          </el-button>
-        </div>
-      </el-card>
-
-      <el-card v-if="selectedText" shadow="hover" style="margin-top: 20px">
-        <template #header>
-          <span>Редактирование текста</span>
-        </template>
-
-        <div class="control-section">
-          <el-input v-model="selectedText.content" placeholder="Содержимое текста" style="margin-bottom: 10px"
-            @input="handleUpdateSelectedText" />
-
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <el-color-picker v-model="selectedText.color" @change="handleUpdateSelectedText" />
-          </div>
-
-          <el-input-number v-model="selectedText.fontSize" :min="0" :max="7" style="width: 100%; margin-bottom: 10px"
-            @change="handleUpdateSelectedText" />
-          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Тип шрифта</label>
-
-          <el-radio-group v-model="selectedText.alignment" style="margin-bottom: 10px"
-            @change="handleUpdateSelectedText">
-            <el-radio-button v-for="option in newTextAlignmentOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </el-radio-button>
-          </el-radio-group>
-
-          <el-input-number v-model="selectedText.textWidth" :min="16" :max="64" style="width: 100%; margin-bottom: 10px"
-            @change="handleUpdateSelectedText" />
-          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Ширина
-            текста</label>
-
-          <div style="display: flex; gap: 10px; margin-bottom: 10px">
-            <el-input-number v-model="selectedText.x" :min="0" :max="128" style="flex: 1"
-              @change="handleUpdateSelectedText" />
-            <el-input-number v-model="selectedText.y" :min="0" :max="128" style="flex: 1"
-              @change="handleUpdateSelectedText" />
-          </div>
-          <label style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 10px">Позиция (X,
-            Y)</label>
-
-          <el-button type="success" @click="handleSendTextToDevice(selectedText)" style="width: 100%; margin-top: 10px">
-            Отправить на устройство
-          </el-button>
-        </div>
-      </el-card>
+      <TextElement :text="selectedText" @update:text="handleUpdateSelectedText" @submit:text="handleSendTextToDevice"
+        @add:text="handleAddText" />
     </div>
 
     <div class="editor-preview">
@@ -343,6 +251,15 @@ async function handleSendTextToDevice(text: TextElement) {
   height: 100%;
 }
 
+.radio-group {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-bottom: 10px;
+}
+
 .editor-controls {
   flex: 0 0 350px;
   overflow-y: auto;
@@ -359,60 +276,5 @@ async function handleSendTextToDevice(text: TextElement) {
   display: flex;
   justify-content: center;
   padding: 20px;
-}
-
-.control-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.text-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.text-item {
-  padding: 10px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  margin-bottom: 8px;
-  background-color: var(--el-bg-color);
-}
-
-.text-item-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.text-preview {
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-}
-
-.text-position {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.text-item-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.text-item {
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.text-item:hover {
-  border-color: var(--el-color-primary);
-}
-
-.text-item-selected {
-  border-color: var(--el-color-primary);
-  background-color: var(--el-color-primary-light-9);
 }
 </style>

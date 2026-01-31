@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:text-position': [textId: number, x: number, y: number];
-  'text-click': [textId: number];
+  'text-click': [textId: number | null];
   'text-delete': [textId: number];
 }>();
 
@@ -151,13 +151,13 @@ function getTextElementStyle(text: TextElement): CSSProperties {
 function shouldAnimateText(text: TextElement): boolean {
   // Only animate if alignment is Scroll (0) AND text doesn't fit in the container
   if (text.alignment !== 0) return false;
-  
+
   // Check if text width exceeds container width
   const containerWidth = text.textWidth * scaleFactor.value;
   const measuredWidth = textWidths.value.get(text.id);
   const fontSize = 12 * scaleFactor.value;
   const estimatedTextWidth = measuredWidth || (text.content.length * fontSize * 0.6);
-  
+
   return estimatedTextWidth > containerWidth;
 }
 
@@ -168,7 +168,7 @@ function needsTextDuplication(text: TextElement): boolean {
 
 function getTextContentStyle(text: TextElement): CSSProperties {
   const needsDuplication = needsTextDuplication(text);
-  
+
   if (!needsDuplication) {
     return {
       display: 'inline-block',
@@ -180,10 +180,10 @@ function getTextContentStyle(text: TextElement): CSSProperties {
   const measuredWidth = textWidths.value.get(text.id);
   const fontSize = 12 * scaleFactor.value;
   const textWidth = measuredWidth || (text.content.length * fontSize * 0.6);
-  
+
   // Speed: 50px per second for smooth scrolling
   const duration = Math.max(3, textWidth / 50);
-  
+
   return {
     display: 'inline-block',
     whiteSpace: 'nowrap',
@@ -194,13 +194,13 @@ function getTextContentStyle(text: TextElement): CSSProperties {
 function measureAllTextWidths() {
   nextTick(() => {
     if (!previewRef.value) return;
-    
+
     props.config.texts.forEach((text) => {
       // Measure width for all texts with Scroll alignment (0) to determine if they need animation
       if (text.alignment !== 0 || textWidths.value.has(text.id)) return;
-      
+
       const textElement = previewRef.value?.querySelector(`[data-text-id="${text.id}"]`) as HTMLElement;
-      
+
       // Create a temporary element to measure the width of one text instance
       const tempEl = document.createElement('span');
       tempEl.style.visibility = 'hidden';
@@ -212,7 +212,7 @@ function measureAllTextWidths() {
       }
       tempEl.textContent = text.content;
       document.body.appendChild(tempEl);
-      
+
       const width = tempEl.offsetWidth;
       textWidths.value.set(text.id, width);
       document.body.removeChild(tempEl);
@@ -260,7 +260,7 @@ if (typeof window !== 'undefined') {
     width: `${previewSize}px`,
     height: `${previewSize}px`,
   }">
-    <div class="preview-background">
+    <div class="preview-background" @click="emit('text-click', null)">
       <div class="grid-overlay"></div>
       <img v-if="imageUrl" :src="imageUrl" alt="Screen preview" class="preview-image" />
       <div v-else class="empty-background">
@@ -268,20 +268,16 @@ if (typeof window !== 'undefined') {
       </div>
     </div>
 
-    <div v-for="text in config.texts" :key="text.id" class="text-element"
-      :class="{ 
-        'text-element-selected': props.selectedText?.id === text.id,
-        'text-element-scrolling': shouldAnimateText(text)
-      }" :style="getTextElementStyle(text)"
-      @mousedown="handleTextMouseDown($event, text)">
+    <div v-for="text in config.texts" :key="text.id" class="text-element" :class="{
+      'text-element-selected': props.selectedText?.id === text.id,
+      'text-element-scrolling': shouldAnimateText(text)
+    }" :style="getTextElementStyle(text)" @mousedown="handleTextMouseDown($event, text)">
       <el-icon class="delete-icon" @click="handleDeleteText($event, text.id)" size="24">
         <CircleCloseFilled />
       </el-icon>
-      <div class="text-wrapper" :style="{ width: `${text.textWidth * scaleFactor}px`, overflow: 'hidden', position: 'relative' }">
-        <span 
-          :data-text-id="text.id"
-          class="text-content" 
-          :class="{ 'text-scrolling': needsTextDuplication(text) }"
+      <div class="text-wrapper"
+        :style="{ width: `${text.textWidth * scaleFactor}px`, overflow: 'hidden', position: 'relative' }">
+        <span :data-text-id="text.id" class="text-content" :class="{ 'text-scrolling': needsTextDuplication(text) }"
           :style="getTextContentStyle(text)">
           <template v-if="needsTextDuplication(text)">
             {{ text.content }}<span class="text-separator"> </span>{{ text.content }}
@@ -418,6 +414,7 @@ if (typeof window !== 'undefined') {
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(calc(-50% - 0.5ch));
   }
