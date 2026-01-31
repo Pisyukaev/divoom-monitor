@@ -1,8 +1,21 @@
-use serde::{de::value, Deserialize, Serialize};
-use serde_json::{json, Number, Value};
+use base64::{engine::general_purpose, Engine as _};
+use image::codecs::jpeg::JpegEncoder;
+use image::{DynamicImage, ImageEncoder};
+use serde::{Deserialize, Serialize};
+use serde_json::Number;
+use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+
+// Static counter for PicID, starting from 1000
+static PIC_ID_COUNTER: AtomicU32 = AtomicU32::new(1000);
+
+fn get_next_pic_id() -> u32 {
+    PIC_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DivoomDevice {
@@ -34,9 +47,29 @@ pub struct DeviceSettings {
     pub light_switch: Option<u8>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextConfig {
+    pub id: u8,
+    pub content: String,
+    pub x: u8,
+    pub y: u8,
+    pub font: Option<u8>,
+    pub color: Option<String>,
+    pub alignment: Option<u8>,
+    pub text_width: Option<u8>,
+}
+
 async fn send_command(ip: &str, command: &serde_json::Value) -> Result<serde_json::Value, String> {
+    send_command_with_timeout(ip, command, Duration::from_millis(500)).await
+}
+
+async fn send_command_with_timeout(
+    ip: &str,
+    command: &serde_json::Value,
+    timeout: Duration,
+) -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(500))
+        .timeout(timeout)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -209,7 +242,7 @@ async fn get_device_info(ip_address: String) -> Result<DeviceSettings, String> {
 
 #[tauri::command]
 async fn set_brightness(ip_address: String, value: Number) {
-    let result = send_command(
+    let _ = send_command(
         &ip_address,
         &serde_json::json!({
             "Command": "Channel/SetBrightness",
@@ -222,7 +255,7 @@ async fn set_brightness(ip_address: String, value: Number) {
 
 #[tauri::command]
 async fn set_switch_screen(ip_address: String, value: Number) {
-    let result = send_command(
+    let _ = send_command(
         &ip_address,
         &serde_json::json!({
             "Command": "Channel/OnOffScreen",
@@ -235,7 +268,7 @@ async fn set_switch_screen(ip_address: String, value: Number) {
 
 #[tauri::command]
 async fn set_temperature_mode(ip_address: String, value: Number) {
-    let result = send_command(
+    let _ = send_command(
         &ip_address,
         &serde_json::json!({
             "Command": "Device/SetDisTempMode",
@@ -249,7 +282,7 @@ async fn set_temperature_mode(ip_address: String, value: Number) {
 
 #[tauri::command]
 async fn set_mirror_mode(ip_address: String, value: Number) {
-    let result = send_command(
+    let _ = send_command(
         &ip_address,
         &serde_json::json!({
             "Command": "Device/SetMirrorMode",
@@ -263,7 +296,7 @@ async fn set_mirror_mode(ip_address: String, value: Number) {
 
 #[tauri::command]
 async fn set_24_hours_mode(ip_address: String, value: Number) {
-    let result = send_command(
+    let _ = send_command(
         &ip_address,
         &serde_json::json!({
             "Command": "Device/SetTime24Flag",
@@ -275,10 +308,198 @@ async fn set_24_hours_mode(ip_address: String, value: Number) {
     .map_err(|e| format!("Failed to send command: {}", e));
 }
 
+#[tauri::command]
+async fn reboot_device(ip_address: String) {
+    let _ = send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/SysReboot",
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send command: {}", e));
+}
+
+fn resize_image(img: DynamicImage, max_width: u32, max_height: u32) -> Result<Vec<u8>, String> {
+    let resized = img.resize_exact(max_width, max_height, image::imageops::FilterType::Lanczos3);
+    let rgba = resized.to_rgba8();
+    let mut buffer = Vec::new();
+    {
+        let encoder = JpegEncoder::new(&mut buffer);
+        encoder
+            .write_image(
+                rgba.as_raw(),
+                rgba.width(),
+                rgba.height(),
+                image::ColorType::Rgba8,
+            )
+            .map_err(|e| format!("Failed to encode image: {}", e))?;
+    }
+
+    Ok(buffer)
+}
+
+async fn load_image_from_url(url: &str) -> Result<DynamicImage, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download image: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Failed to download image: {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read image bytes: {}", e))?;
+
+    image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode image: {}", e))
+}
+
+async fn load_image_from_file(file_path: &str) -> Result<DynamicImage, String> {
+    image::open(Path::new(file_path)).map_err(|e| format!("Failed to open image file: {}", e))
+}
+
+#[tauri::command]
+async fn upload_image_from_url(
+    ip_address: String,
+    screen_index: u32,
+    url: String,
+) -> Result<(), String> {
+    let img = load_image_from_url(&url).await?;
+    let image_data = resize_image(img, 128, 128)?;
+    let base64_data = general_purpose::STANDARD.encode(&image_data);
+
+    // Create LCD array with 1 at screen_index position, 0 elsewhere
+    let mut lcd_array = [0u8; 5];
+    if screen_index < 5 {
+        lcd_array[screen_index as usize] = 1;
+    }
+
+    let pic_id = get_next_pic_id();
+
+    send_command_with_timeout(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Draw/SendHttpGif",
+            "LCDArray": lcd_array,
+            "PicNum": 1,
+            "PicWidth": 128,
+            "PicOffset": 0,
+            "PicID": pic_id,
+            "PicSpeed": 1000,
+            "PicData": base64_data
+        }),
+        Duration::from_secs(1),
+    )
+    .await
+    .map_err(|e| format!("Failed to send image command: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn upload_image_from_file(
+    ip_address: String,
+    screen_index: u32,
+    file_path: String,
+) -> Result<(), String> {
+    let img = load_image_from_file(&file_path).await?;
+    let image_data = resize_image(img, 128, 128)?;
+    let base64_data = general_purpose::STANDARD.encode(&image_data);
+
+    // Create LCD array with 1 at screen_index position, 0 elsewhere
+    let mut lcd_array = [0u8; 5];
+    if screen_index < 5 {
+        lcd_array[screen_index as usize] = 1;
+    }
+
+    let pic_id = get_next_pic_id();
+
+    send_command_with_timeout(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Draw/SendHttpGif",
+            "LCDArray": lcd_array,
+            "PicNum": 1,
+            "PicWidth": 128,
+            "PicOffset": 0,
+            "PicID": pic_id,
+            "PicSpeed": 1000,
+            "PicData": base64_data
+        }),
+        Duration::from_secs(1),
+    )
+    .await
+    .map_err(|e| format!("Failed to send image command: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn set_screen_text(
+    ip_address: String,
+    screen_index: u32,
+    text_config: TextConfig,
+) -> Result<(), String> {
+    let color = text_config
+        .color
+        .unwrap_or_else(|| "255,255,255".to_string());
+    let font = text_config.font.unwrap_or(7);
+    let alignment = text_config.alignment.unwrap_or(0);
+    let text_width = text_config.text_width.unwrap_or(64);
+
+    send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Draw/SendHttpText",
+            "LcdIndex": screen_index,
+            "TextId": text_config.id,
+            "x": text_config.x,
+            "y": text_config.y,
+            "dir": 0,
+            "font": font,
+            "TextWidth": text_width,
+            "speed": 100,
+            "TextString": text_config.content,
+            "color": color,
+            "align": alignment
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send text command: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn setup_devtools(app: &tauri::App) {
+    let main_window = app.get_webview_window("main").unwrap();
+    main_window.open_devtools();
+}
+
+#[cfg(not(debug_assertions))]
+fn setup_devtools(_app: &tauri::App) {
+    // Ничего не делать в production
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            setup_devtools(app);
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             scan_devices,
             get_device_info,
@@ -287,6 +508,10 @@ pub fn run() {
             set_temperature_mode,
             set_mirror_mode,
             set_24_hours_mode,
+            upload_image_from_url,
+            upload_image_from_file,
+            set_screen_text,
+            reboot_device,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -21,6 +21,8 @@ export function useDevice() {
   async function fetchDeviceSettings(
     id: string
   ): Promise<DeviceSettings | null> {
+    isLoadingSettings.value = true;
+    settingsError.value = null;
     try {
       const decodedId = decodeDeviceId(id);
       // Try to get device info by IP address
@@ -29,11 +31,16 @@ export function useDevice() {
           ipAddress: decodedId,
         });
         settings.value = deviceInfo;
+        isLoadingSettings.value = false;
         return deviceInfo;
       }
+      isLoadingSettings.value = false;
+      settingsError.value = 'Неверный формат IP адреса';
       return null;
     } catch (error) {
       console.error('Error fetching device:', error);
+      isLoadingSettings.value = false;
+      settingsError.value = error instanceof Error ? error.message : 'Ошибка загрузки настроек устройства';
       return null;
     }
   }

@@ -1,15 +1,21 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { Search } from '@element-plus/icons-vue';
 
 import { scanDevices } from '../../api/common';
+import Header from '../Header.vue';
+import DeviceCard from './device-card.vue';
 import type { DivoomDevice } from '../../types/device';
 
-import DeviceCard from './device-card.vue';
+
+const router = useRouter();
 
 const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
 const error = ref<string | null>(null);
+const selectedDevice = ref<DivoomDevice | null>(null)
+
 
 async function scan() {
   isScanning.value = true;
@@ -25,45 +31,34 @@ async function scan() {
   }
 }
 
+
+function handleCardClick(device: DivoomDevice) {
+  selectedDevice.value = device
+  router.push(`/device/${device.ip_address}`);
+}
+
 onMounted(() => {
   scan();
 });
 </script>
 
 <template>
+  <Header />
   <div class="container">
     <div class="controls">
-      <el-button
-        type="primary"
-        :icon="Search"
-        :loading="isScanning"
-        @click="scan"
-        size="large"
-      >
+      <el-button type="primary" :icon="Search" :loading="isScanning" @click="scan" size="large">
         {{ isScanning ? 'Сканирование...' : 'Сканировать устройства' }}
       </el-button>
     </div>
 
-    <el-alert
-      v-if="error"
-      :title="error"
-      type="error"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 20px"
-    />
+    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon style="margin-bottom: 20px" />
 
-    <el-empty
-      v-if="devices.length === 0 && !isScanning"
-      description="Устройства не найдены. Нажмите 'Сканировать устройства' для поиска."
-    />
+    <el-empty v-if="devices.length === 0 && !isScanning"
+      description="Устройства не найдены. Нажмите 'Сканировать устройства' для поиска." />
 
     <div class="devices-grid">
-      <DeviceCard
-        v-for="device in devices"
-        :key="device.ip_address || device.mac_address || device.name"
-        :device="device"
-      />
+      <DeviceCard v-for="device in devices" :key="device.ip_address || device.mac_address || device.name"
+        :device="device" :onClick="() => handleCardClick(device)" />
     </div>
   </div>
 </template>

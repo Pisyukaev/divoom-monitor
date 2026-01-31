@@ -1,15 +1,21 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import { RouterView } from 'vue-router';
-import ThemeToggle from './components/ThemeToggle.vue';
+import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
+
+onMounted(async () => {
+  await sendConfigsToAllDevices();
+});
 </script>
 
 <template>
   <div class="app-container">
-    <header class="app-header">
-      <h1>Divoom Device Monitor</h1>
-      <ThemeToggle />
-    </header>
-    <RouterView />
+    <RouterView v-slot="{ Component, route: currentRoute }">
+      <component :is="Component" v-if="Component" :key="currentRoute.path" />
+      <div v-else class="no-route">
+        <p>Маршрут не найден: {{ currentRoute.path }}</p>
+      </div>
+    </RouterView>
   </div>
 </template>
 
@@ -50,21 +56,15 @@ body {
   flex-direction: column;
 }
 
-.app-header {
+.app-container> :deep(div) {
+  flex: 1;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  background-color: var(--el-bg-color);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-  position: relative;
+  flex-direction: column;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+.no-route {
+  padding: 40px;
+  text-align: center;
   color: var(--el-text-color-primary);
 }
 </style>

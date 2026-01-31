@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import DeviceList from '../components/device-list/list.vue';
-import DeviceSettings from '../views/DeviceSettings.vue';
+import DeviceSettingsView from '../views/DeviceSettingsView.vue';
+import CommonSettingsView from '../views/CommonSettingsView.vue';
+import DisplaySettingsView from '../views/DisplaySettingsView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -12,12 +14,34 @@ const router = createRouter({
     },
     {
       path: '/device/:id',
-      name: 'DeviceSettings',
-      component: DeviceSettings,
+      component: DeviceSettingsView,
       props: true,
+      children: [
+        {
+          path: '',
+          redirect: (to) => {
+            return { path: `/device/${to.params.id}/common` };
+          },
+        },
+        {
+          path: 'common',
+          name: 'CommonSettings',
+          component: CommonSettingsView,
+          props: true,
+        },
+        {
+          path: 'display',
+          name: 'DisplaySettings',
+          component: DisplaySettingsView,
+          props: true,
+        },
+      ],
     },
   ],
 });
 
-export default router;
+router.onError((error) => {
+  console.error('Router error:', error);
+});
 
+export default router;
