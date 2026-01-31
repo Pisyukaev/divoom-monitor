@@ -18,6 +18,7 @@ export interface ScreenConfig {
   screenIndex: number;
   image?: ScreenImage;
   texts: TextElement[];
+  textIds: number[];
 }
 
 export interface ScreenConfigs {
