@@ -49,7 +49,6 @@ function handleChangeTextProp<T extends keyof TextElementType,
   emit('update:text', currentText.value);
 }
 
-
 function handleSubmitText() {
   if (props.text) {
     emit('submit:text', currentText.value);

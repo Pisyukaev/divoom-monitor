@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onBeforeMount, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import ScreenEditor from './ScreenEditor.vue';
@@ -129,7 +129,7 @@ async function handleSendAllToDevice() {
   }
 }
 
-onMounted(() => {
+onBeforeMount(() => {
   loadConfigs();
 });
 
