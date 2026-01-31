@@ -25,6 +25,25 @@ export const dateFormats = [
   },
 ];
 
+export const TEXT_ALIGNMENT_OPTIONS: { label: string; value: number }[] = [
+  { label: 'Scroll', value: 0 },
+  { label: 'Normal', value: 1 },
+  { label: 'Middle', value: 2 },
+  { label: 'Right', value: 3 },
+  { label: 'Left', value: 4 },
+];
+
+export const FONT_OPTIONS: { label: string; value: number }[] = [
+  { label: 'Arial', value: 0 },
+  { label: 'Times New Roman', value: 1 },
+  { label: 'Verdana', value: 2 },
+  { label: 'Courier New', value: 3 },
+  { label: 'Georgia', value: 4 },
+  { label: 'Garamond', value: 5 },
+  { label: 'Comic Sans MS', value: 6 },
+  { label: 'Impact', value: 7 },
+];
+
 export const commands = [
   'scan_devices',
   'set_brightness',
