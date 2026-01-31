@@ -14,7 +14,7 @@ const emit = defineEmits<{
 }>();
 
 const textId = ref(0);
-const newText = computed<TextElementType>(() => ({
+const newText = ref<TextElementType>({
   id: textId.value,
   content: '',
   x: 0,
@@ -23,7 +23,7 @@ const newText = computed<TextElementType>(() => ({
   color: '#FFFFFF',
   alignment: 0,
   textWidth: 64,
-}));
+});
 
 const currentText = computed(() => {
   return props.text ?? newText.value;
