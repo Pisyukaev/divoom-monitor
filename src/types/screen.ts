@@ -5,7 +5,7 @@ export interface TextElement {
   y: number;
   font?: number;
   color?: string;
-  alignment?: 0 | 1 | 2 | 3 | 4;
+  alignment?: number;
   textWidth: number;
 }
 
