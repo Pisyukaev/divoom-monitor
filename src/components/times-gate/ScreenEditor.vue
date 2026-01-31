@@ -20,12 +20,7 @@ const imageUrlInput = ref('');
 const isLoadingImage = ref(false);
 const selectedText = ref<TextElementType | null>(null);
 
-const localConfig = computed({
-  get: () => props.config,
-  set: (value) => emit('update:config', value),
-});
-
-
+const localConfig = ref<ScreenConfig>(props.config);
 
 async function handleLoadLocalImage() {
   try {
@@ -65,6 +60,7 @@ async function handleLoadLocalImage() {
       ElMessage.error(`Ошибка загрузки изображения: ${error}`);
     } finally {
       isLoadingImage.value = false;
+      emit('update:config', localConfig.value);
     }
   } catch (error) {
     console.error('Error selecting file:', error);
@@ -100,6 +96,7 @@ async function handleLoadImageFromUrl() {
     ElMessage.error(`Ошибка загрузки изображения: ${error}`);
   } finally {
     isLoadingImage.value = false;
+    emit('update:config', localConfig.value);
   }
 }
 
@@ -108,6 +105,8 @@ function handleRemoveImage() {
     ...localConfig.value,
     image: undefined,
   };
+
+  emit('update:config', localConfig.value);
 }
 
 function handleAddText(text: TextElementType) {
@@ -115,7 +114,9 @@ function handleAddText(text: TextElementType) {
     ...localConfig.value,
     texts: [...localConfig.value.texts, text],
   };
+  handleSendTextToDevice(text);
   ElMessage.success('Текст добавлен');
+  emit('update:config', localConfig.value);
 }
 
 function handleRemoveText(textId: number) {
@@ -127,6 +128,8 @@ function handleRemoveText(textId: number) {
     ...localConfig.value,
     texts: localConfig.value.texts.filter((t) => t.id !== textId),
   };
+
+  emit('update:config', localConfig.value);
 }
 
 function handleTextClick(textId: number | null) {
@@ -138,8 +141,6 @@ function handleTextClick(textId: number | null) {
   const text = localConfig.value.texts.find((t) => t.id === textId);
 
   selectedText.value = text || null;
-
-
 }
 
 function handleUpdateSelectedText(text: TextElementType) {
@@ -193,6 +194,8 @@ async function handleSendTextToDevice(text: TextElementType) {
   } catch (error) {
     console.error('Error sending text:', error);
     ElMessage.error(`Ошибка отправки текста: ${error}`);
+  } finally {
+    emit('update:config', localConfig.value);
   }
 }
 </script>
