@@ -3,7 +3,7 @@ use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
@@ -524,12 +524,23 @@ struct SidecarTemperatures {
 
 fn sidecar_temperatures() -> Option<SidecarTemperatures> {
     let sidecar_path = std::env::var("LHM_SIDECAR_PATH").ok()?;
-    let output = Command::new(sidecar_path).output().ok()?;
+    let resolved_path = resolve_sidecar_path(&sidecar_path)?;
+    let output = Command::new(resolved_path).output().ok()?;
     if !output.status.success() {
         return None;
     }
 
     serde_json::from_slice(&output.stdout).ok()
+}
+
+fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
+    let path = Path::new(raw_path);
+    if path.is_absolute() {
+        return Some(path.to_path_buf());
+    }
+
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    Some(exe_dir.join(path))
 }
 
 #[cfg(target_os = "windows")]

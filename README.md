@@ -21,4 +21,4 @@ Then set the environment variable before running Tauri:
 pnpm run start
 ```
 
-You can also put `LHM_SIDECAR_PATH` into the `.env` file at the repo root. The Tauri backend loads it automatically at startup.
+You can also put `LHM_SIDECAR_PATH` into the `.env` file at the repo root. The Tauri backend loads it automatically at startup. Relative paths are resolved from the Tauri executable directory.
