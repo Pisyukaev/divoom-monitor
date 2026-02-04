@@ -522,6 +522,16 @@ struct SidecarTemperatures {
     gpu_temperature: Option<f32>,
 }
 
+fn normalize_temperature(value: Option<f32>) -> Option<f32> {
+    value.and_then(|temp| {
+        if (-30.0..=200.0).contains(&temp) {
+            Some(temp)
+        } else {
+            None
+        }
+    })
+}
+
 fn sidecar_temperatures() -> Option<SidecarTemperatures> {
     let sidecar_path = std::env::var("LHM_SIDECAR_PATH").ok()?;
     let resolved_path = resolve_sidecar_path(&sidecar_path)?;
@@ -530,7 +540,10 @@ fn sidecar_temperatures() -> Option<SidecarTemperatures> {
         return None;
     }
 
-    serde_json::from_slice(&output.stdout).ok()
+    let mut temps: SidecarTemperatures = serde_json::from_slice(&output.stdout).ok()?;
+    temps.cpu_temperature = normalize_temperature(temps.cpu_temperature);
+    temps.gpu_temperature = normalize_temperature(temps.gpu_temperature);
+    Some(temps)
 }
 
 fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
