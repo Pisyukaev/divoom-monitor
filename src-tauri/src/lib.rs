@@ -547,7 +547,7 @@ fn nvml_gpu_temperature() -> Option<f32> {
         let device = nvml.device_by_index(index).ok()?;
         if let Ok(temp) = device.temperature(TemperatureSensor::Gpu) {
             let temp = temp as f32;
-            best_temp = Some(best_temp.map_or(temp, |current| current.max(temp)));
+            best_temp = Some(best_temp.map_or(temp, |current: f32| current.max(temp)));
         }
     }
 
