@@ -5,3 +5,19 @@ This template should help get you started developing with Vue 3 and TypeScript i
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+## Hardware temperature sidecar (Windows)
+
+To get CPU/GPU temperatures on Windows, build the optional .NET sidecar and point the app to it:
+
+```bash
+cd src-tauri/sidecar/HardwareMonitorCli
+dotnet publish -c Release -r win-x64
+```
+
+Then set the environment variable before running Tauri:
+
+```bash
+set LHM_SIDECAR_PATH=src-tauri\sidecar\HardwareMonitorCli\bin\Release\net8.0\win-x64\publish\HardwareMonitorCli.exe
+pnpm run start
+```

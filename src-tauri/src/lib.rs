@@ -4,6 +4,7 @@ use image::{DynamicImage, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use std::path::Path;
+use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use sysinfo::{Components, Disks, System};
@@ -515,6 +516,22 @@ fn find_temperature(components: &Components, keywords: &[&str]) -> Option<f32> {
     best_temp
 }
 
+#[derive(Debug, Deserialize)]
+struct SidecarTemperatures {
+    cpu_temperature: Option<f32>,
+    gpu_temperature: Option<f32>,
+}
+
+fn sidecar_temperatures() -> Option<SidecarTemperatures> {
+    let sidecar_path = std::env::var("LHM_SIDECAR_PATH").ok()?;
+    let output = Command::new(sidecar_path).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    serde_json::from_slice(&output.stdout).ok()
+}
+
 #[cfg(target_os = "windows")]
 #[derive(Deserialize, Debug)]
 struct ThermalZoneTemperature {
@@ -555,6 +572,12 @@ fn nvml_gpu_temperature() -> Option<f32> {
 }
 
 fn get_cpu_temperature(components: &Components) -> Option<f32> {
+    if let Some(temps) = sidecar_temperatures() {
+        if temps.cpu_temperature.is_some() {
+            return temps.cpu_temperature;
+        }
+    }
+
     #[cfg(target_os = "windows")]
     {
         wmi_cpu_temperature().or_else(|| find_temperature(components, &["cpu", "package"]))
@@ -567,6 +590,12 @@ fn get_cpu_temperature(components: &Components) -> Option<f32> {
 }
 
 fn get_gpu_temperature(components: &Components) -> Option<f32> {
+    if let Some(temps) = sidecar_temperatures() {
+        if temps.gpu_temperature.is_some() {
+            return temps.gpu_temperature;
+        }
+    }
+
     #[cfg(target_os = "windows")]
     {
         nvml_gpu_temperature().or_else(|| find_temperature(components, &["gpu", "graphics"]))
