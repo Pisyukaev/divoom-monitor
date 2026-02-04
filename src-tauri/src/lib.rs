@@ -9,6 +9,9 @@ use std::time::Duration;
 use sysinfo::{Components, Disks, System};
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+use wmi::{COMLibrary, WMIConnection};
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 // Static counter for PicID, starting from 1000
@@ -512,6 +515,69 @@ fn find_temperature(components: &Components, keywords: &[&str]) -> Option<f32> {
     best_temp
 }
 
+#[cfg(target_os = "windows")]
+#[derive(Deserialize, Debug)]
+struct ThermalZoneTemperature {
+    #[serde(rename = "CurrentTemperature")]
+    current_temperature: u32,
+}
+
+#[cfg(target_os = "windows")]
+fn wmi_cpu_temperature() -> Option<f32> {
+    let com_library = COMLibrary::new().ok()?;
+    let wmi_connection = WMIConnection::new(com_library.into()).ok()?;
+    let temps: Vec<ThermalZoneTemperature> = wmi_connection
+        .raw_query("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")
+        .ok()?;
+
+    temps
+        .iter()
+        .map(|entry| (entry.current_temperature as f32 / 10.0) - 273.15)
+        .reduce(f32::max)
+}
+
+#[cfg(target_os = "windows")]
+fn nvml_gpu_temperature() -> Option<f32> {
+    use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
+    let nvml = nvml_wrapper::Nvml::init().ok()?;
+    let device_count = nvml.device_count().ok()?;
+    let mut best_temp = None;
+
+    for index in 0..device_count {
+        let device = nvml.device_by_index(index).ok()?;
+        if let Ok(temp) = device.temperature(TemperatureSensor::Gpu) {
+            let temp = temp as f32;
+            best_temp = Some(best_temp.map_or(temp, |current| current.max(temp)));
+        }
+    }
+
+    best_temp
+}
+
+fn get_cpu_temperature(components: &Components) -> Option<f32> {
+    #[cfg(target_os = "windows")]
+    {
+        wmi_cpu_temperature().or_else(|| find_temperature(components, &["cpu", "package"]))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        find_temperature(components, &["cpu", "package"])
+    }
+}
+
+fn get_gpu_temperature(components: &Components) -> Option<f32> {
+    #[cfg(target_os = "windows")]
+    {
+        nvml_gpu_temperature().or_else(|| find_temperature(components, &["gpu", "graphics"]))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        find_temperature(components, &["gpu", "graphics"])
+    }
+}
+
 #[tauri::command]
 fn get_system_metrics() -> Result<SystemMetrics, String> {
     let mut system = System::new_all();
@@ -527,8 +593,8 @@ fn get_system_metrics() -> Result<SystemMetrics, String> {
 
     let cpu_usage = system.global_cpu_info().cpu_usage();
 
-    let cpu_temperature = find_temperature(&components, &["cpu", "package"]);
-    let gpu_temperature = find_temperature(&components, &["gpu", "graphics"]);
+    let cpu_temperature = get_cpu_temperature(&components);
+    let gpu_temperature = get_gpu_temperature(&components);
 
     let disks = disks
         .iter()
