@@ -12,12 +12,12 @@ To get CPU/GPU temperatures on Windows, build the optional .NET sidecar and poin
 
 ```bash
 cd src-tauri/sidecar/HardwareMonitorCli
-dotnet publish -c Release -r win-x64
+dotnet publish -c Release
 ```
 
 Then set the environment variable before running Tauri:
 
 ```bash
-set LHM_SIDECAR_PATH=src-tauri\sidecar\HardwareMonitorCli\bin\Release\net8.0\win-x64\publish\HardwareMonitorCli.exe
+set LHM_SIDECAR_PATH=src-tauri\sidecar\HardwareMonitorCli\bin\Release\net6.0\publish\HardwareMonitorCli.exe
 pnpm run start
 ```
