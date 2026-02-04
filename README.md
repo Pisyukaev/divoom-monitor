@@ -18,6 +18,7 @@ dotnet publish -c Release
 Then set the environment variable before running Tauri:
 
 ```bash
-set LHM_SIDECAR_PATH=src-tauri\sidecar\HardwareMonitorCli\bin\Release\net6.0\publish\HardwareMonitorCli.exe
 pnpm run start
 ```
+
+You can also put `LHM_SIDECAR_PATH` into the `.env` file at the repo root. The Tauri backend loads it automatically at startup.

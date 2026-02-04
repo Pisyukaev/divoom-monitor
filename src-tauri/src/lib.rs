@@ -671,6 +671,7 @@ fn setup_devtools(_app: &tauri::App) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenvy::dotenv().ok();
     tauri::Builder::default()
         .setup(|app| {
             setup_devtools(app);
