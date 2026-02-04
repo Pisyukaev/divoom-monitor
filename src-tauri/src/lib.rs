@@ -6,6 +6,7 @@ use serde_json::Number;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
+use sysinfo::System;
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -57,6 +58,26 @@ pub struct TextConfig {
     pub color: Option<String>,
     pub alignment: Option<u8>,
     pub text_width: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiskUsage {
+    pub name: String,
+    pub mount_point: String,
+    pub total_space: u64,
+    pub available_space: u64,
+    pub used_space: u64,
+    pub usage_percent: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemMetrics {
+    pub cpu_usage: f32,
+    pub cpu_temperature: Option<f32>,
+    pub gpu_temperature: Option<f32>,
+    pub memory_total: u64,
+    pub memory_used: u64,
+    pub disks: Vec<DiskUsage>,
 }
 
 async fn send_command(ip: &str, command: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -479,6 +500,70 @@ async fn set_screen_text(
     Ok(())
 }
 
+fn find_temperature(components: &[sysinfo::Component], keywords: &[&str]) -> Option<f32> {
+    let mut best_temp: Option<f32> = None;
+    for component in components {
+        let label = component.label().to_lowercase();
+        if keywords.iter().any(|keyword| label.contains(keyword)) {
+            let temperature = component.temperature();
+            best_temp = Some(best_temp.map_or(temperature, |current| current.max(temperature)));
+        }
+    }
+    best_temp
+}
+
+#[tauri::command]
+fn get_system_metrics() -> Result<SystemMetrics, String> {
+    let mut system = System::new_all();
+
+    system.refresh_cpu();
+    std::thread::sleep(Duration::from_millis(200));
+    system.refresh_cpu();
+    system.refresh_memory();
+    system.refresh_components();
+    system.refresh_disks_list();
+    system.refresh_disks();
+
+    let cpu_usage = system.global_cpu_info().cpu_usage();
+
+    let components = system.components();
+    let cpu_temperature = find_temperature(components, &["cpu", "package"]);
+    let gpu_temperature = find_temperature(components, &["gpu", "graphics"]);
+
+    let disks = system
+        .disks()
+        .iter()
+        .map(|disk| {
+            let total_space = disk.total_space();
+            let available_space = disk.available_space();
+            let used_space = total_space.saturating_sub(available_space);
+            let usage_percent = if total_space > 0 {
+                (used_space as f32 / total_space as f32) * 100.0
+            } else {
+                0.0
+            };
+
+            DiskUsage {
+                name: disk.name().to_string_lossy().to_string(),
+                mount_point: disk.mount_point().to_string_lossy().to_string(),
+                total_space,
+                available_space,
+                used_space,
+                usage_percent,
+            }
+        })
+        .collect();
+
+    Ok(SystemMetrics {
+        cpu_usage,
+        cpu_temperature,
+        gpu_temperature,
+        memory_total: system.total_memory(),
+        memory_used: system.used_memory(),
+        disks,
+    })
+}
+
 #[cfg(debug_assertions)]
 fn setup_devtools(app: &tauri::App) {
     let main_window = app.get_webview_window("main").unwrap();
@@ -512,6 +597,7 @@ pub fn run() {
             upload_image_from_file,
             set_screen_text,
             reboot_device,
+            get_system_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
