@@ -6,7 +6,7 @@ use serde_json::Number;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
-use sysinfo::System;
+use sysinfo::{Components, Disks, System};
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -500,9 +500,9 @@ async fn set_screen_text(
     Ok(())
 }
 
-fn find_temperature(components: &[sysinfo::Component], keywords: &[&str]) -> Option<f32> {
+fn find_temperature(components: &Components, keywords: &[&str]) -> Option<f32> {
     let mut best_temp: Option<f32> = None;
-    for component in components {
+    for component in components.iter() {
         let label = component.label().to_lowercase();
         if keywords.iter().any(|keyword| label.contains(keyword)) {
             let temperature = component.temperature();
@@ -515,23 +515,22 @@ fn find_temperature(components: &[sysinfo::Component], keywords: &[&str]) -> Opt
 #[tauri::command]
 fn get_system_metrics() -> Result<SystemMetrics, String> {
     let mut system = System::new_all();
+    let mut components = Components::new();
+    let mut disks = Disks::new();
 
     system.refresh_cpu();
     std::thread::sleep(Duration::from_millis(200));
     system.refresh_cpu();
     system.refresh_memory();
-    system.refresh_components();
-    system.refresh_disks_list();
-    system.refresh_disks();
+    components.refresh();
+    disks.refresh();
 
     let cpu_usage = system.global_cpu_info().cpu_usage();
 
-    let components = system.components();
-    let cpu_temperature = find_temperature(components, &["cpu", "package"]);
-    let gpu_temperature = find_temperature(components, &["gpu", "graphics"]);
+    let cpu_temperature = find_temperature(&components, &["cpu", "package"]);
+    let gpu_temperature = find_temperature(&components, &["gpu", "graphics"]);
 
-    let disks = system
-        .disks()
+    let disks = disks
         .iter()
         .map(|disk| {
             let total_space = disk.total_space();
