@@ -1,0 +1,5 @@
+# Ignore sidecar build outputs to prevent app restart on file changes
+sidecar/**/bin/
+sidecar/**/obj/
+sidecar/**/*.sys
+sidecar/**/*.pdb
