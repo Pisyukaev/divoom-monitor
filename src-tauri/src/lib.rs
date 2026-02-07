@@ -4,7 +4,8 @@ use image::{DynamicImage, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Child};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 use sysinfo::{Components, Disks, System};
@@ -17,6 +18,11 @@ use wmi::{COMLibrary, WMIConnection};
 
 // Static counter for PicID, starting from 1000
 static PIC_ID_COUNTER: AtomicU32 = AtomicU32::new(1000);
+
+// Sidecar process handle
+static SIDECAR_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
+// Флаг запуска sidecar для предотвращения повторных попыток
+static SIDECAR_STARTING: Mutex<bool> = Mutex::new(false);
 
 fn get_next_pic_id() -> u32 {
     PIC_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -524,25 +530,102 @@ struct SidecarTemperatures {
 
 fn normalize_temperature(value: Option<f32>) -> Option<f32> {
     value.and_then(|temp| {
+        #[cfg(debug_assertions)]
+        eprintln!("[Normalize] Checking temperature: {:.1}°C", temp);
+        
         if (-30.0..=200.0).contains(&temp) {
+            #[cfg(debug_assertions)]
+            eprintln!("[Normalize] Temperature {:.1}°C is within valid range", temp);
             Some(temp)
         } else {
+            #[cfg(debug_assertions)]
+            eprintln!("[Normalize] Temperature {:.1}°C is OUTSIDE valid range (-30..200), filtering out", temp);
             None
         }
     })
 }
 
-fn sidecar_temperatures() -> Option<SidecarTemperatures> {
-    let sidecar_path = std::env::var("LHM_SIDECAR_PATH").ok()?;
-    let resolved_path = resolve_sidecar_path(&sidecar_path)?;
-    let output = Command::new(resolved_path).output().ok()?;
-    if !output.status.success() {
+async fn sidecar_temperatures() -> Option<SidecarTemperatures> {
+    // Пытаемся получить данные через HTTP запрос к sidecar серверу
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_millis(500))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[LibreHardwareMonitor] Failed to create HTTP client: {}", e);
+            return None;
+        }
+    };
+    
+    #[cfg(debug_assertions)]
+    eprintln!("[LibreHardwareMonitor] Requesting temperatures from http://localhost:8765/");
+    
+    let response = match client
+        .get("http://localhost:8765/")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[LibreHardwareMonitor] HTTP request failed: {} (sidecar may not be running)", e);
+            return None;
+        }
+    };
+    
+    if !response.status().is_success() {
+        #[cfg(debug_assertions)]
+        eprintln!("[LibreHardwareMonitor] HTTP request failed with status: {}", response.status());
         return None;
     }
-
-    let mut temps: SidecarTemperatures = serde_json::from_slice(&output.stdout).ok()?;
+    
+    let json_text = match response.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[LibreHardwareMonitor] Failed to read response body: {}", e);
+            return None;
+        }
+    };
+    
+    #[cfg(debug_assertions)]
+    eprintln!("[LibreHardwareMonitor] Raw JSON response: {}", json_text);
+    
+    let mut temps: SidecarTemperatures = match serde_json::from_str(&json_text) {
+        Ok(t) => t,
+        Err(e) => {
+            #[cfg(debug_assertions)]
+            eprintln!("[LibreHardwareMonitor] Failed to parse JSON: {} (response was: {})", e, json_text);
+            return None;
+        }
+    };
+    
+    #[cfg(debug_assertions)]
+    eprintln!("[LibreHardwareMonitor] Parsed temperatures - CPU: {:?}°C, GPU: {:?}°C", 
+        temps.cpu_temperature, temps.gpu_temperature);
+    
+    let cpu_before = temps.cpu_temperature;
+    let gpu_before = temps.gpu_temperature;
+    
     temps.cpu_temperature = normalize_temperature(temps.cpu_temperature);
     temps.gpu_temperature = normalize_temperature(temps.gpu_temperature);
+    
+    #[cfg(debug_assertions)]
+    {
+        if cpu_before != temps.cpu_temperature {
+            eprintln!("[LibreHardwareMonitor] CPU temperature normalized: {:?}°C -> {:?}°C", 
+                cpu_before, temps.cpu_temperature);
+        }
+        if gpu_before != temps.gpu_temperature {
+            eprintln!("[LibreHardwareMonitor] GPU temperature normalized: {:?}°C -> {:?}°C", 
+                gpu_before, temps.gpu_temperature);
+        }
+        eprintln!("[LibreHardwareMonitor] Final temperatures - CPU: {:?}°C, GPU: {:?}°C", 
+            temps.cpu_temperature, temps.gpu_temperature);
+    }
+    
     Some(temps)
 }
 
@@ -554,6 +637,90 @@ fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
 
     let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     Some(exe_dir.join(path))
+}
+
+fn start_sidecar_service() -> Result<(), String> {
+    // Безопасная обертка для всех операций
+    let result = std::panic::catch_unwind(|| {
+        let sidecar_path = std::env::var("LHM_SIDECAR_PATH")
+            .map_err(|_| "LHM_SIDECAR_PATH environment variable not set")?;
+        
+        let resolved_path = resolve_sidecar_path(&sidecar_path)
+            .ok_or_else(|| format!("Failed to resolve sidecar path: {}", sidecar_path))?;
+        
+        if !resolved_path.exists() {
+            #[cfg(debug_assertions)]
+            eprintln!("Warning: Sidecar executable not found at: {:?}", resolved_path);
+            #[cfg(debug_assertions)]
+            eprintln!("Sidecar service will not be started. Temperature monitoring may be limited.");
+            return Err(format!("Sidecar executable not found at: {:?}", resolved_path));
+        }
+        
+        // Проверяем, не запущен ли уже sidecar (простая TCP проверка порта)
+        use std::net::{TcpStream, SocketAddr};
+        use std::time::Duration as StdDuration;
+        
+        // Безопасная проверка порта с таймаутом
+        let addr: SocketAddr = "127.0.0.1:8765".parse()
+            .map_err(|_| "Failed to parse socket address")?;
+        
+        let port_check = TcpStream::connect_timeout(&addr, StdDuration::from_millis(100));
+        
+        if port_check.is_ok() {
+            #[cfg(debug_assertions)]
+            eprintln!("Sidecar service is already running (port 8765 is open)");
+            return Ok(()); // Sidecar уже запущен
+        }
+        
+        let mut process = Command::new(&resolved_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to start sidecar process: {}", e))?;
+        
+        // Проверяем, что процесс запустился успешно
+        match process.try_wait() {
+            Ok(Some(status)) => {
+                // Читаем stderr для диагностики
+                let mut stderr = String::new();
+                if let Some(mut child_stderr) = process.stderr.take() {
+                    use std::io::Read;
+                    let _ = std::io::BufReader::new(&mut child_stderr).read_to_string(&mut stderr);
+                }
+                return Err(format!("Sidecar process exited immediately with status: {:?}. Stderr: {}", status, stderr));
+            }
+            Ok(None) => {
+                // Процесс работает - это хорошо
+            }
+            Err(e) => {
+                return Err(format!("Failed to check sidecar process status: {}", e));
+            }
+        }
+        
+        // Сохраняем handle процесса
+        let mut sidecar_guard = SIDECAR_PROCESS.lock()
+            .map_err(|e| format!("Failed to lock sidecar process mutex: {}", e))?;
+        *sidecar_guard = Some(process);
+        
+        // Даем серверу время на запуск
+        std::thread::sleep(Duration::from_millis(1000));
+        
+        // Проверяем, что сервер действительно запустился (простая TCP проверка)
+        let check_addr: SocketAddr = "127.0.0.1:8765".parse()
+            .map_err(|_| "Failed to parse socket address")?;
+        let _ = TcpStream::connect_timeout(&check_addr, StdDuration::from_millis(500));
+        
+        #[cfg(debug_assertions)]
+        eprintln!("Sidecar service started successfully");
+        
+        Ok(())
+    });
+    
+    match result {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err("Panic occurred while starting sidecar service".to_string()),
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -595,50 +762,110 @@ fn nvml_gpu_temperature() -> Option<f32> {
     best_temp
 }
 
-fn get_cpu_temperature(components: &Components) -> Option<f32> {
-    if let Some(temps) = sidecar_temperatures() {
+async fn get_cpu_temperature(components: &Components) -> Option<f32> {
+    #[cfg(debug_assertions)]
+    eprintln!("[CPU Temperature] Starting temperature retrieval...");
+    
+    if let Some(temps) = sidecar_temperatures().await {
+        #[cfg(debug_assertions)]
+        eprintln!("[CPU Temperature] Sidecar response received, CPU temp: {:?}", temps.cpu_temperature);
+        
         if temps.cpu_temperature.is_some() {
+            #[cfg(debug_assertions)]
+            eprintln!("[CPU Temperature] Using LibreHardwareMonitor: {:.1}°C", temps.cpu_temperature.unwrap());
             return temps.cpu_temperature;
+        } else {
+            #[cfg(debug_assertions)]
+            eprintln!("[CPU Temperature] LibreHardwareMonitor returned None (temperature was filtered or not found), trying fallback methods");
         }
+    } else {
+        #[cfg(debug_assertions)]
+        eprintln!("[CPU Temperature] LibreHardwareMonitor unavailable (sidecar not responding or error), trying fallback methods");
     }
 
     #[cfg(target_os = "windows")]
     {
-        wmi_cpu_temperature().or_else(|| find_temperature(components, &["cpu", "package"]))
+        if let Some(wmi_temp) = wmi_cpu_temperature() {
+            #[cfg(debug_assertions)]
+            eprintln!("[CPU Temperature] Using WMI: {:.1}°C", wmi_temp);
+            return Some(wmi_temp);
+        }
+        if let Some(sysinfo_temp) = find_temperature(components, &["cpu", "package"]) {
+            #[cfg(debug_assertions)]
+            eprintln!("[CPU Temperature] Using sysinfo: {:.1}°C", sysinfo_temp);
+            return Some(sysinfo_temp);
+        }
+        #[cfg(debug_assertions)]
+        eprintln!("[CPU Temperature] No temperature data available from any source");
+        None
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        find_temperature(components, &["cpu", "package"])
+        if let Some(sysinfo_temp) = find_temperature(components, &["cpu", "package"]) {
+            #[cfg(debug_assertions)]
+            eprintln!("[CPU Temperature] Using sysinfo: {:.1}°C", sysinfo_temp);
+            return Some(sysinfo_temp);
+        }
+        #[cfg(debug_assertions)]
+        eprintln!("[CPU Temperature] No temperature data available");
+        None
     }
 }
 
-fn get_gpu_temperature(components: &Components) -> Option<f32> {
-    if let Some(temps) = sidecar_temperatures() {
+async fn get_gpu_temperature(components: &Components) -> Option<f32> {
+    if let Some(temps) = sidecar_temperatures().await {
         if temps.gpu_temperature.is_some() {
+            #[cfg(debug_assertions)]
+            eprintln!("[GPU Temperature] Using LibreHardwareMonitor: {:.1}°C", temps.gpu_temperature.unwrap());
             return temps.gpu_temperature;
+        } else {
+            #[cfg(debug_assertions)]
+            eprintln!("[GPU Temperature] LibreHardwareMonitor returned None, trying fallback methods");
         }
+    } else {
+        #[cfg(debug_assertions)]
+        eprintln!("[GPU Temperature] LibreHardwareMonitor unavailable, trying fallback methods");
     }
 
     #[cfg(target_os = "windows")]
     {
-        nvml_gpu_temperature().or_else(|| find_temperature(components, &["gpu", "graphics"]))
+        if let Some(nvml_temp) = nvml_gpu_temperature() {
+            #[cfg(debug_assertions)]
+            eprintln!("[GPU Temperature] Using NVML: {:.1}°C", nvml_temp);
+            return Some(nvml_temp);
+        }
+        if let Some(sysinfo_temp) = find_temperature(components, &["gpu", "graphics"]) {
+            #[cfg(debug_assertions)]
+            eprintln!("[GPU Temperature] Using sysinfo: {:.1}°C", sysinfo_temp);
+            return Some(sysinfo_temp);
+        }
+        #[cfg(debug_assertions)]
+        eprintln!("[GPU Temperature] No temperature data available from any source");
+        None
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        find_temperature(components, &["gpu", "graphics"])
+        if let Some(sysinfo_temp) = find_temperature(components, &["gpu", "graphics"]) {
+            #[cfg(debug_assertions)]
+            eprintln!("[GPU Temperature] Using sysinfo: {:.1}°C", sysinfo_temp);
+            return Some(sysinfo_temp);
+        }
+        #[cfg(debug_assertions)]
+        eprintln!("[GPU Temperature] No temperature data available");
+        None
     }
 }
 
 #[tauri::command]
-fn get_system_metrics() -> Result<SystemMetrics, String> {
+async fn get_system_metrics() -> Result<SystemMetrics, String> {
     let mut system = System::new_all();
     let mut components = Components::new();
     let mut disks = Disks::new();
 
     system.refresh_cpu();
-    std::thread::sleep(Duration::from_millis(200));
+    tokio::time::sleep(Duration::from_millis(200)).await;
     system.refresh_cpu();
     system.refresh_memory();
     components.refresh();
@@ -646,8 +873,17 @@ fn get_system_metrics() -> Result<SystemMetrics, String> {
 
     let cpu_usage = system.global_cpu_info().cpu_usage();
 
-    let cpu_temperature = get_cpu_temperature(&components);
-    let gpu_temperature = get_gpu_temperature(&components);
+    // Получаем температуры (в режиме разработки ошибки не приводят к падению приложения)
+    let cpu_temperature = get_cpu_temperature(&components).await;
+    let gpu_temperature = get_gpu_temperature(&components).await;
+    
+    #[cfg(debug_assertions)]
+    eprintln!("[SystemMetrics] Final metrics - CPU: {:.1}% usage, CPU temp: {:?}°C, GPU temp: {:?}°C, Memory: {:.1}% used",
+        cpu_usage,
+        cpu_temperature.map(|t| format!("{:.1}", t)).unwrap_or_else(|| "N/A".to_string()),
+        gpu_temperature.map(|t| format!("{:.1}", t)).unwrap_or_else(|| "N/A".to_string()),
+        (system.used_memory() as f32 / system.total_memory() as f32) * 100.0
+    );
 
     let disks = disks
         .iter()
@@ -684,13 +920,90 @@ fn get_system_metrics() -> Result<SystemMetrics, String> {
 
 #[cfg(debug_assertions)]
 fn setup_devtools(app: &tauri::App) {
-    let main_window = app.get_webview_window("main").unwrap();
-    main_window.open_devtools();
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window.open_devtools();
+    }
 }
 
 #[cfg(not(debug_assertions))]
 fn setup_devtools(_app: &tauri::App) {
     // Ничего не делать в production
+}
+
+fn stop_sidecar_service() {
+    let mut sidecar_guard = match SIDECAR_PROCESS.lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    
+    if let Some(mut child) = sidecar_guard.take() {
+        // Неблокирующее завершение процесса
+        let _ = child.kill();
+        // Не ждем завершения, чтобы не блокировать поток
+        #[cfg(debug_assertions)]
+        eprintln!("Sidecar service stop requested");
+    }
+}
+
+fn setup_sidecar_service() {
+    // Проверяем, не запускается ли уже sidecar
+    let mut starting_guard = match SIDECAR_STARTING.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            eprintln!("Failed to lock SIDECAR_STARTING mutex - skipping sidecar startup");
+            return;
+        }
+    };
+    
+    if *starting_guard {
+        #[cfg(debug_assertions)]
+        eprintln!("Sidecar is already starting - skipping");
+        return;
+    }
+    
+    *starting_guard = true;
+    drop(starting_guard);
+    
+    // Запускаем sidecar в отдельном потоке, чтобы не блокировать запуск приложения
+    // Обертываем в catch_unwind для защиты от паник
+    std::thread::spawn(|| {
+        let result = std::panic::catch_unwind(|| {
+            // Небольшая задержка перед запуском sidecar
+            std::thread::sleep(Duration::from_millis(500));
+            
+            // В режиме разработки не падаем при ошибках запуска sidecar
+            match start_sidecar_service() {
+                Ok(_) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("LibreHardwareMonitor sidecar service started");
+                }
+                Err(e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Warning: Failed to start sidecar service: {}", e);
+                    #[cfg(debug_assertions)]
+                    eprintln!("Application will continue, but temperature monitoring may be limited.");
+                    // В production режиме можно логировать ошибку, но не падать
+                    #[cfg(not(debug_assertions))]
+                    eprintln!("Failed to start sidecar service: {}", e);
+                }
+            }
+            
+            // Сбрасываем флаг после попытки запуска
+            if let Ok(mut guard) = SIDECAR_STARTING.lock() {
+                *guard = false;
+            }
+        });
+        
+        if result.is_err() {
+            #[cfg(debug_assertions)]
+            eprintln!("Panic occurred in sidecar setup thread - ignoring");
+            // Сбрасываем флаг при панике
+            if let Ok(mut guard) = SIDECAR_STARTING.lock() {
+                *guard = false;
+            }
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -699,6 +1012,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             setup_devtools(app);
+            setup_sidecar_service();
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
