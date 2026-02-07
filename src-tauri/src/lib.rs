@@ -4,9 +4,10 @@ use image::{DynamicImage, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
+use std::{fs, io};
+use std::time::{Duration, Instant};
 use sysinfo::{Components, Disks, System};
 use tauri::Manager;
 
@@ -535,7 +536,8 @@ fn normalize_temperature(value: Option<f32>) -> Option<f32> {
 fn sidecar_temperatures() -> Option<SidecarTemperatures> {
     let sidecar_path = std::env::var("LHM_SIDECAR_PATH").ok()?;
     let resolved_path = resolve_sidecar_path(&sidecar_path)?;
-    let output = Command::new(resolved_path).output().ok()?;
+    let resolved_path = prepare_sidecar_path(&resolved_path).unwrap_or(resolved_path);
+    let output = run_sidecar_with_timeout(&resolved_path, Duration::from_secs(2))?;
     if !output.status.success() {
         return None;
     }
@@ -554,6 +556,78 @@ fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
 
     let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     Some(exe_dir.join(path))
+}
+
+fn prepare_sidecar_path(resolved_path: &Path) -> Option<PathBuf> {
+    if !cfg!(debug_assertions) {
+        return Some(resolved_path.to_path_buf());
+    }
+
+    let current_dir = std::env::current_dir().ok()?;
+    if !resolved_path.starts_with(&current_dir) {
+        return Some(resolved_path.to_path_buf());
+    }
+
+    let source_dir = resolved_path.parent()?;
+    let temp_dir = std::env::temp_dir().join("divoom-monitor-sidecar");
+    let target_path = temp_dir.join(resolved_path.file_name()?);
+
+    if let Ok(()) = copy_dir_recursive(source_dir, &temp_dir) {
+        return Some(target_path);
+    }
+
+    Some(resolved_path.to_path_buf())
+}
+
+fn copy_dir_recursive(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let target = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &target)?;
+        } else if should_copy(&entry.path(), &target)? {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+fn should_copy(source: &Path, destination: &Path) -> io::Result<bool> {
+    if !destination.exists() {
+        return Ok(true);
+    }
+
+    let source_modified = fs::metadata(source)?.modified()?;
+    let dest_modified = fs::metadata(destination)?.modified()?;
+    Ok(source_modified > dest_modified)
+}
+
+fn run_sidecar_with_timeout(
+    resolved_path: &Path,
+    timeout: Duration,
+) -> Option<std::process::Output> {
+    let mut child = Command::new(resolved_path)
+        .current_dir(std::env::temp_dir())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let start = Instant::now();
+    loop {
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            return None;
+        }
+
+        match child.try_wait() {
+            Ok(Some(_status)) => return child.wait_with_output().ok(),
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(_) => return None,
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
