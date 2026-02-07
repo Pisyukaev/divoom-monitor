@@ -930,18 +930,38 @@ fn setup_devtools(_app: &tauri::App) {
     // Ничего не делать в production
 }
 
+#[allow(dead_code)]
 fn stop_sidecar_service() {
     let mut sidecar_guard = match SIDECAR_PROCESS.lock() {
         Ok(guard) => guard,
-        Err(_) => return,
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            eprintln!("Failed to lock sidecar process mutex for shutdown");
+            return;
+        }
     };
     
     if let Some(mut child) = sidecar_guard.take() {
-        // Неблокирующее завершение процесса
-        let _ = child.kill();
-        // Не ждем завершения, чтобы не блокировать поток
         #[cfg(debug_assertions)]
-        eprintln!("Sidecar service stop requested");
+        eprintln!("Stopping sidecar service (PID: {:?})...", child.id());
+        
+        // Пытаемся корректно завершить процесс
+        let kill_result = child.kill();
+        
+        #[cfg(debug_assertions)]
+        {
+            if kill_result.is_ok() {
+                eprintln!("Sidecar service stop signal sent");
+            } else {
+                eprintln!("Failed to send stop signal to sidecar: {:?}", kill_result);
+            }
+        }
+        
+        // Не ждем завершения, чтобы не блокировать поток
+        // Процесс завершится автоматически
+    } else {
+        #[cfg(debug_assertions)]
+        eprintln!("No sidecar process to stop");
     }
 }
 
@@ -1009,10 +1029,29 @@ fn setup_sidecar_service() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     dotenvy::dotenv().ok();
+    
+    // Регистрируем обработчик для остановки sidecar при выходе из процесса
+    // Это сработает даже если приложение завершится неожиданно
+    let _ = std::panic::set_hook(Box::new(|_| {
+        stop_sidecar_service();
+    }));
+    
     tauri::Builder::default()
         .setup(|app| {
             setup_devtools(app);
             setup_sidecar_service();
+            
+            // Останавливаем sidecar при закрытии окна
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        #[cfg(debug_assertions)]
+                        eprintln!("Window closing, stopping sidecar service...");
+                        stop_sidecar_service();
+                    }
+                });
+            }
+            
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -1034,4 +1073,8 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+    
+    // Дополнительная защита - остановка sidecar при выходе из run()
+    // Это сработает, если приложение завершится нормально
+    stop_sidecar_service();
 }
