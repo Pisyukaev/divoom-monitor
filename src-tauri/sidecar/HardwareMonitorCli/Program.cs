@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LibreHardwareMonitor.Hardware;
 using System.Net;
 using System.Text;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
+using System.IO;
 
 var computer = new Computer
 {
@@ -40,8 +43,13 @@ while (true)
         var request = context.Request;
         var response = context.Response;
 
+        var metrics = new SystemMetrics();
         float? cpuTemp = null;
         float? gpuTemp = null;
+        float cpuUsageTotal = 0;
+        int cpuCoreCount = 0;
+        ulong memoryTotal = 0;
+        ulong memoryUsed = 0;
 
         foreach (var hardware in computer.Hardware)
         {
@@ -49,7 +57,7 @@ while (true)
             
             foreach (var sensor in hardware.Sensors)
             {
-                if (sensor.SensorType != SensorType.Temperature || !sensor.Value.HasValue)
+                if (!sensor.Value.HasValue)
                 {
                     continue;
                 }
@@ -57,37 +65,72 @@ while (true)
                 var value = sensor.Value.Value;
                 var sensorName = sensor.Name?.ToLower() ?? "";
                 
-                // Фильтруем неправильные значения (диапазон: -30..200°C)
-                if (value < -30 || value > 200)
+                switch (sensor.SensorType)
                 {
-                    continue;
-                }
-                
-                switch (hardware.HardwareType)
-                {
-                    case HardwareType.Cpu:
-                        // Приоритет датчику "CPU Package" или содержащему "total"
-                        if (sensorName.Contains("package") || sensorName.Contains("total"))
+                    case SensorType.Temperature:
+                        // Фильтруем неправильные значения (диапазон: -30..200°C)
+                        if (value < -30 || value > 200)
                         {
-                            cpuTemp = value;
+                            continue;
                         }
-                        else if (!cpuTemp.HasValue)
+                        
+                        switch (hardware.HardwareType)
                         {
-                            cpuTemp = value;
+                            case HardwareType.Cpu:
+                                if (sensorName.Contains("package") || sensorName.Contains("total"))
+                                {
+                                    cpuTemp = value;
+                                }
+                                else if (!cpuTemp.HasValue)
+                                {
+                                    cpuTemp = value;
+                                }
+                                break;
+                                
+                            case HardwareType.GpuAmd:
+                            case HardwareType.GpuNvidia:
+                            case HardwareType.GpuIntel:
+                                if (sensorName.Contains("core") && !sensorName.Contains("memory"))
+                                {
+                                    gpuTemp = value;
+                                }
+                                else if (!gpuTemp.HasValue && !sensorName.Contains("memory") && !sensorName.Contains("junction"))
+                                {
+                                    gpuTemp = value;
+                                }
+                                break;
                         }
                         break;
                         
-                    case HardwareType.GpuAmd:
-                    case HardwareType.GpuNvidia:
-                    case HardwareType.GpuIntel:
-                        // Приоритет датчику "GPU Core"
-                        if (sensorName.Contains("core") && !sensorName.Contains("memory"))
+                    case SensorType.Load:
+                        if (hardware.HardwareType == HardwareType.Cpu)
                         {
-                            gpuTemp = value;
+                            if (sensorName.Contains("total"))
+                            {
+                                cpuUsageTotal = value;
+                            }
+                            else if (sensorName.StartsWith("cpu core #"))
+                            {
+                                cpuCoreCount++;
+                            }
                         }
-                        else if (!gpuTemp.HasValue && !sensorName.Contains("memory") && !sensorName.Contains("junction"))
+                        break;
+                        
+                    case SensorType.Data:
+                        if (hardware.HardwareType == HardwareType.Memory)
                         {
-                            gpuTemp = value;
+                            if (sensorName.Contains("used"))
+                            {
+                                memoryUsed = (ulong)(value * 1024 * 1024 * 1024); // GB to bytes
+                            }
+                            else if (sensorName.Contains("available") || sensorName.Contains("free"))
+                            {
+                                var available = (ulong)(value * 1024 * 1024 * 1024);
+                                if (memoryTotal == 0)
+                                {
+                                    memoryTotal = memoryUsed + available;
+                                }
+                            }
                         }
                         break;
                 }
@@ -129,12 +172,46 @@ while (true)
                 }
             }
         }
-
-        var payload = new
+        
+        // Получаем информацию о дисках
+        var disks = new List<DiskUsage>();
+        var drives = DriveInfo.GetDrives();
+        foreach (var drive in drives)
         {
-            cpu_temperature = cpuTemp,
-            gpu_temperature = gpuTemp
-        };
+            try
+            {
+                if (drive.IsReady && drive.DriveType == DriveType.Fixed)
+                {
+                    var totalSpace = (ulong)drive.TotalSize;
+                    var availableSpace = (ulong)drive.AvailableFreeSpace;
+                    var usedSpace = totalSpace - availableSpace;
+                    var usagePercent = totalSpace > 0 ? (float)usedSpace / totalSpace * 100 : 0;
+                    
+                    disks.Add(new DiskUsage
+                    {
+                        Name = drive.Name,
+                        MountPoint = drive.RootDirectory.FullName,
+                        TotalSpace = totalSpace,
+                        AvailableSpace = availableSpace,
+                        UsedSpace = usedSpace,
+                        UsagePercent = usagePercent
+                    });
+                }
+            }
+            catch
+            {
+                // Пропускаем диски с ошибками
+            }
+        }
+
+        metrics.CpuUsage = cpuUsageTotal;
+        metrics.CpuTemperature = cpuTemp;
+        metrics.GpuTemperature = gpuTemp;
+        metrics.MemoryTotal = memoryTotal;
+        metrics.MemoryUsed = memoryUsed;
+        metrics.Disks = disks;
+
+        var payload = metrics;
 
         var json = JsonSerializer.Serialize(payload);
         var buffer = Encoding.UTF8.GetBytes(json);
@@ -150,4 +227,46 @@ while (true)
     {
         Console.Error.WriteLine($"Error handling request: {ex.Message}");
     }
+}
+
+class DiskUsage
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+    
+    [JsonPropertyName("mount_point")]
+    public string MountPoint { get; set; } = "";
+    
+    [JsonPropertyName("total_space")]
+    public ulong TotalSpace { get; set; }
+    
+    [JsonPropertyName("available_space")]
+    public ulong AvailableSpace { get; set; }
+    
+    [JsonPropertyName("used_space")]
+    public ulong UsedSpace { get; set; }
+    
+    [JsonPropertyName("usage_percent")]
+    public float UsagePercent { get; set; }
+}
+
+class SystemMetrics
+{
+    [JsonPropertyName("cpu_usage")]
+    public float CpuUsage { get; set; }
+    
+    [JsonPropertyName("cpu_temperature")]
+    public float? CpuTemperature { get; set; }
+    
+    [JsonPropertyName("gpu_temperature")]
+    public float? GpuTemperature { get; set; }
+    
+    [JsonPropertyName("memory_total")]
+    public ulong MemoryTotal { get; set; }
+    
+    [JsonPropertyName("memory_used")]
+    public ulong MemoryUsed { get; set; }
+    
+    [JsonPropertyName("disks")]
+    public List<DiskUsage> Disks { get; set; } = new();
 }
