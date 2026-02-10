@@ -136,17 +136,14 @@ onUnmounted(() => {
       <div v-if="disks.length === 0" class="empty-state">Данные о дисках недоступны.</div>
       <div v-else class="disk-list">
         <div v-for="disk in disks" :key="`${disk.name}-${disk.mount_point}`" class="disk-item">
+
+          <strong>{{ disk.name || 'Диск' }}</strong>
+          <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
           <div class="disk-info">
-            <div class="disk-title">
-              <strong>{{ disk.name || 'Диск' }}</strong>
-              <span class="disk-mount">{{ disk.mount_point }}</span>
-            </div>
-            <div class="disk-metrics">
+            <div class="metric-footer">
               <span>{{ formatBytes(disk.used_space) }} из {{ formatBytes(disk.total_space) }}</span>
-              <span>{{ formatPercent(disk.usage_percent) }}</span>
             </div>
           </div>
-          <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
         </div>
       </div>
     </el-card>
@@ -254,7 +251,7 @@ onUnmounted(() => {
 
 .disk-info {
   display: flex;
-  justify-content: space-between;
+  justify-content: end;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
