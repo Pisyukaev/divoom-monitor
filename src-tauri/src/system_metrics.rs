@@ -68,43 +68,32 @@ fn normalize_temperature(value: Option<f32>) -> Option<f32> {
     })
 }
 
-#[allow(dead_code)]
 async fn sidecar_metrics() -> Option<SystemMetrics> {
-    // Пытаемся получить данные через HTTP запрос к sidecar серверу
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_millis(500))
         .build()
     {
         Ok(c) => c,
-        Err(_e) => {
-            return None;
-        }
+        Err(_) => return None,
     };
 
     let response = match client.get("http://localhost:8765/").send().await {
         Ok(r) => r,
-        Err(_e) => {
-            return None;
-        }
+        Err(_) => return None,
     };
 
     if !response.status().is_success() {
-        #[cfg(debug_assertions)]
         return None;
     }
 
     let json_text = match response.text().await {
         Ok(t) => t,
-        Err(_e) => {
-            return None;
-        }
+        Err(_) => return None,
     };
 
     let metrics: SystemMetrics = match serde_json::from_str(&json_text) {
         Ok(t) => t,
-        Err(_e) => {
-            return None;
-        }
+        Err(_) => return None,
     };
 
     Some(metrics)
@@ -326,6 +315,12 @@ async fn get_gpu_temperature(components: &Components) -> Option<f32> {
 
 #[tauri::command]
 pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
+    // Пытаемся получить полные данные из sidecar
+    if let Some(metrics) = sidecar_metrics().await {
+        return Ok(metrics);
+    }
+
+    // Fallback на sysinfo, если sidecar недоступен
     let mut system = System::new_all();
     let mut components = Components::new();
     let mut disks = Disks::new();
@@ -338,7 +333,6 @@ pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
     disks.refresh();
 
     let cpu_usage = system.global_cpu_info().cpu_usage();
-
     let cpu_temperature = get_cpu_temperature(&components).await;
     let gpu_temperature = get_gpu_temperature(&components).await;
 
