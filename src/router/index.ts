@@ -36,12 +36,13 @@ const router = createRouter({
           component: DisplaySettingsView,
           props: true,
         },
+        {
+          path: 'system',
+          name: 'SystemMetrics',
+          component: SystemMetricsView,
+          props: true,
+        },
       ],
-    },
-    {
-      path: '/system',
-      name: 'SystemMetrics',
-      component: SystemMetricsView,
     },
   ],
 });

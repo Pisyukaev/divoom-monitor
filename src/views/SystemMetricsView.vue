@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Refresh } from '@element-plus/icons-vue';
 
-import Header from '../components/Header.vue';
 import { getSystemMetrics } from '../api/system';
 import type { DiskUsage, SystemMetrics } from '../types/system';
 
@@ -67,7 +66,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Header />
   <div class="metrics-page">
     <div class="metrics-header">
       <div>
