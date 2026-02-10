@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 var computer = new Computer
 {
@@ -48,8 +49,9 @@ while (true)
         float? gpuTemp = null;
         float cpuUsageTotal = 0;
         int cpuCoreCount = 0;
-        ulong memoryTotal = 0;
-        ulong memoryUsed = 0;
+
+        // Получаем данные о памяти через Windows API
+        var (memoryTotal, memoryUsed) = MemoryHelper.GetMemoryInfo();
 
         foreach (var hardware in computer.Hardware)
         {
@@ -112,24 +114,6 @@ while (true)
                             else if (sensorName.StartsWith("cpu core #"))
                             {
                                 cpuCoreCount++;
-                            }
-                        }
-                        break;
-                        
-                    case SensorType.Data:
-                        if (hardware.HardwareType == HardwareType.Memory)
-                        {
-                            if (sensorName.Contains("used"))
-                            {
-                                memoryUsed = (ulong)(value * 1024 * 1024 * 1024); // GB to bytes
-                            }
-                            else if (sensorName.Contains("available") || sensorName.Contains("free"))
-                            {
-                                var available = (ulong)(value * 1024 * 1024 * 1024);
-                                if (memoryTotal == 0)
-                                {
-                                    memoryTotal = memoryUsed + available;
-                                }
                             }
                         }
                         break;
@@ -269,4 +253,38 @@ class SystemMetrics
     
     [JsonPropertyName("disks")]
     public List<DiskUsage> Disks { get; set; } = new();
+}
+
+[StructLayout(LayoutKind.Sequential)]
+struct MEMORYSTATUSEX
+{
+    public uint dwLength;
+    public uint dwMemoryLoad;
+    public ulong ullTotalPhys;
+    public ulong ullAvailPhys;
+    public ulong ullTotalPageFile;
+    public ulong ullAvailPageFile;
+    public ulong ullTotalVirtual;
+    public ulong ullAvailVirtual;
+    public ulong ullAvailExtendedVirtual;
+}
+
+static class NativeMethods
+{
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+}
+
+static class MemoryHelper
+{
+    public static (ulong total, ulong used) GetMemoryInfo()
+    {
+        var memStatus = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX)) };
+        if (NativeMethods.GlobalMemoryStatusEx(ref memStatus))
+        {
+            return (memStatus.ullTotalPhys, memStatus.ullTotalPhys - memStatus.ullAvailPhys);
+        }
+        return (0, 0);
+    }
 }
