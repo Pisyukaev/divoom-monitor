@@ -123,8 +123,8 @@ onUnmounted(() => {
         </div>
         <el-progress :percentage="memoryUsagePercent" :stroke-width="10" status="success" />
         <div class="metric-footer">
-          <span>{{ formatBytes(metrics.memory_used * 1024) }}</span>
-          <span>из {{ formatBytes(metrics.memory_total * 1024) }}</span>
+          <span>{{ formatBytes(metrics.memory_used) }}</span>
+          <span>из {{ formatBytes(metrics.memory_total) }}</span>
         </div>
       </el-card>
     </div>
