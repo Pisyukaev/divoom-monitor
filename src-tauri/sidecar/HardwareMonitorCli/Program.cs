@@ -9,6 +9,8 @@ var computer = new Computer
 {
     IsCpuEnabled = true,
     IsGpuEnabled = true,
+    IsMemoryEnabled = true,
+    IsStorageEnabled = true,
     IsMotherboardEnabled = true
 };
 
@@ -38,22 +40,16 @@ while (true)
         var request = context.Request;
         var response = context.Response;
 
-        // Обновляем данные о железе
         float? cpuTemp = null;
         float? gpuTemp = null;
-        var cpuSensorCount = 0;
-        var gpuSensorCount = 0;
-        var cpuTemps = new List<float>();
-        var gpuTemps = new List<float>();
 
         foreach (var hardware in computer.Hardware)
         {
             hardware.Update();
-            Console.Error.WriteLine($"Hardware: {hardware.HardwareType} - {hardware.Name}");
             
             foreach (var sensor in hardware.Sensors)
             {
-                if (sensor.SensorType != SensorType.Temperature || sensor.Value is null)
+                if (sensor.SensorType != SensorType.Temperature || !sensor.Value.HasValue)
                 {
                     continue;
                 }
@@ -61,68 +57,46 @@ while (true)
                 var value = sensor.Value.Value;
                 var sensorName = sensor.Name?.ToLower() ?? "";
                 
-                // Фильтруем явно неправильные значения (например, 255°C - это часто значение по умолчанию для неработающих датчиков)
-                // Разумный диапазон для температур: от -30 до 150°C
-                if (value < -30 || value > 150)
+                // Фильтруем неправильные значения (диапазон: -30..200°C)
+                if (value < -30 || value > 200)
                 {
-                    Console.Error.WriteLine($"  Sensor: {sensor.Name} = {value}°C - FILTERED OUT (out of range -30..150°C)");
                     continue;
                 }
-                
-                Console.Error.WriteLine($"  Sensor: {sensor.Name} = {value}°C (Type: {sensor.SensorType}, Hardware: {hardware.HardwareType})");
                 
                 switch (hardware.HardwareType)
                 {
                     case HardwareType.Cpu:
-                        cpuSensorCount++;
-                        cpuTemps.Add(value);
-                        // Приоритет датчику "CPU total" или "total", если он есть
-                        if (sensorName.Contains("total"))
+                        // Приоритет датчику "CPU Package" или содержащему "total"
+                        if (sensorName.Contains("package") || sensorName.Contains("total"))
                         {
-                            cpuTemp = value; // Используем значение напрямую, так как это основной датчик
-                            Console.Error.WriteLine($"    -> CPU temperature updated (TOTAL sensor): {cpuTemp}°C");
-                        }
-                        else if (!cpuTemp.HasValue || cpuTemp.Value < value)
-                        {
-                            // Если нет "total", берем максимальное значение
                             cpuTemp = value;
-                            Console.Error.WriteLine($"    -> CPU temperature updated: {cpuTemp}°C");
+                        }
+                        else if (!cpuTemp.HasValue)
+                        {
+                            cpuTemp = value;
                         }
                         break;
+                        
                     case HardwareType.GpuAmd:
                     case HardwareType.GpuNvidia:
                     case HardwareType.GpuIntel:
-                        gpuSensorCount++;
-                        gpuTemps.Add(value);
-                        // Для GPU приоритет датчику "GPU Core" или "Core"
+                        // Приоритет датчику "GPU Core"
                         if (sensorName.Contains("core") && !sensorName.Contains("memory"))
                         {
-                            // GPU Core имеет приоритет - используем его значение напрямую
                             gpuTemp = value;
-                            Console.Error.WriteLine($"    -> GPU temperature updated (CORE sensor): {gpuTemp}°C");
                         }
-                        else if (sensorName.Contains("memory") || sensorName.Contains("junction"))
+                        else if (!gpuTemp.HasValue && !sensorName.Contains("memory") && !sensorName.Contains("junction"))
                         {
-                            // Игнорируем Memory Junction - часто дает неверные значения
-                            Console.Error.WriteLine($"    -> GPU sensor ignored (Memory Junction): {sensor.Name} = {value}°C");
-                        }
-                        else if (!gpuTemp.HasValue)
-                        {
-                            // Если нет Core датчика, используем первый валидный (например, Hot Spot)
                             gpuTemp = value;
-                            Console.Error.WriteLine($"    -> GPU temperature updated: {gpuTemp}°C");
                         }
-                        // Если уже есть значение от Core, игнорируем остальные
                         break;
                 }
             }
         }
         
-        // Для CPU пытаемся найти температуру через другие источники, если основной не найден
+        // Поиск CPU температуры на материнской плате, если не найдена
         if (!cpuTemp.HasValue)
         {
-            Console.Error.WriteLine("CPU temperature not found in CPU hardware, searching in Motherboard...");
-            // Ищем температуру в других типах оборудования или через другие датчики
             foreach (var hardware in computer.Hardware)
             {
                 if (hardware.HardwareType == HardwareType.Motherboard)
@@ -135,39 +109,26 @@ while (true)
                             var value = sensor.Value.Value;
                             var sensorName = sensor.Name?.ToLower() ?? "";
                             
-                            // Фильтруем неправильные значения
-                            if (value < -30 || value > 150)
+                            if (value >= -30 && value <= 200)
                             {
-                                continue;
-                            }
-                            
-                            // Ищем датчики, которые могут быть связаны с CPU
-                            if ((sensorName.Contains("cpu") || sensorName.Contains("package") || 
-                                 sensorName.Contains("core") || sensorName.Contains("tctl") ||
-                                 sensorName.Contains("tdie") || sensorName.Contains("processor")) && 
-                                value >= 0 && value <= 150)
-                            {
-                                Console.Error.WriteLine($"  Found CPU-related sensor on {hardware.HardwareType}: {sensor.Name} = {value}°C");
-                                cpuTemps.Add(value);
-                                cpuTemp = cpuTemp.HasValue ? Math.Max(cpuTemp.Value, value) : value;
-                                cpuSensorCount++;
+                                if (sensorName.Contains("cpu") || sensorName.Contains("package") || 
+                                    sensorName.Contains("tctl") || sensorName.Contains("tdie") || 
+                                    sensorName.Contains("processor"))
+                                {
+                                    cpuTemp = value;
+                                    break;
+                                }
                             }
                         }
                     }
                 }
+                
+                if (cpuTemp.HasValue)
+                {
+                    break;
+                }
             }
         }
-        
-        Console.Error.WriteLine($"Summary - CPU sensors found: {cpuSensorCount}, GPU sensors found: {gpuSensorCount}");
-        if (cpuTemps.Count > 0)
-        {
-            Console.Error.WriteLine($"CPU temperatures collected: [{string.Join(", ", cpuTemps.Select(t => $"{t:F1}°C"))}]");
-        }
-        if (gpuTemps.Count > 0)
-        {
-            Console.Error.WriteLine($"GPU temperatures collected: [{string.Join(", ", gpuTemps.Select(t => $"{t:F1}°C"))}]");
-        }
-        Console.Error.WriteLine($"Final temperatures - CPU: {cpuTemp?.ToString("F1") ?? "null"}°C, GPU: {gpuTemp?.ToString("F1") ?? "null"}°C");
 
         var payload = new
         {
