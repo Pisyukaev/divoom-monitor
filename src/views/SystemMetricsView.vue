@@ -95,7 +95,7 @@ onUnmounted(() => {
           <span class="value">{{ formatPercent(metrics.cpu_usage) }}</span>
           <span class="label">Загрузка</span>
         </div>
-        <el-progress :percentage="metrics.cpu_usage" :stroke-width="10" />
+        <el-progress :percentage="metrics.cpu_usage" :stroke-width="10" :format="formatPercent" />
         <div class="metric-footer">
           <span>Температура</span>
           <strong>{{ formatTemperature(metrics.cpu_temperature) }}</strong>
@@ -121,7 +121,7 @@ onUnmounted(() => {
           <span class="value">{{ formatPercent(memoryUsagePercent) }}</span>
           <span class="label">Использование</span>
         </div>
-        <el-progress :percentage="memoryUsagePercent" :stroke-width="10" status="success" />
+        <el-progress :percentage="memoryUsagePercent" :stroke-width="10" status="success" :format="formatPercent" />
         <div class="metric-footer">
           <span>{{ formatBytes(metrics.memory_used) }}</span>
           <span>из {{ formatBytes(metrics.memory_total) }}</span>
@@ -146,7 +146,7 @@ onUnmounted(() => {
               <span>{{ formatPercent(disk.usage_percent) }}</span>
             </div>
           </div>
-          <el-progress :percentage="disk.usage_percent" :stroke-width="8" />
+          <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
         </div>
       </div>
     </el-card>
