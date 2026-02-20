@@ -6,6 +6,8 @@ const THEME_STORAGE_KEY = 'divoom-monitor-theme';
 
 const isDark = ref<boolean>(false);
 
+let mediaQueryCleanup: (() => void) | null = null;
+
 export function useTheme() {
   const setTheme = (theme: Theme) => {
     isDark.value = theme === 'dark';
@@ -25,19 +27,21 @@ export function useTheme() {
   };
 
   const initTheme = () => {
+    if (mediaQueryCleanup) {
+      mediaQueryCleanup();
+    }
+
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
 
     if (savedTheme) {
       setTheme(savedTheme);
     } else {
-      // Проверяем системные настройки
       const prefersDark = window.matchMedia(
         '(prefers-color-scheme: dark)'
       ).matches;
       setTheme(prefersDark ? 'dark' : 'light');
     }
 
-    // Слушаем изменения системной темы (только если тема не сохранена)
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
       if (!localStorage.getItem(THEME_STORAGE_KEY)) {
@@ -46,6 +50,7 @@ export function useTheme() {
     };
 
     mediaQuery.addEventListener('change', handleChange);
+    mediaQueryCleanup = () => mediaQuery.removeEventListener('change', handleChange);
   };
 
   return {

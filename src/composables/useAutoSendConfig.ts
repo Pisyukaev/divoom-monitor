@@ -32,12 +32,19 @@ export async function sendConfigsToDevice(
           throw new Error(`Invalid image type: ${config.image.type}`);
       }
 
-      try {
-        await invoke(method, {
+      const params: Record<string, unknown> = {
           ipAddress: deviceIp,
           screenIndex: i,
-          url: config.image.source,
-        });
+        };
+
+      if (config.image.type === 'url') {
+        params.url = config.image.source;
+      } else if (config.image.type === 'local') {
+        params.filePath = config.image.source;
+      }
+
+      try {
+        await invoke(method, params);
       } catch (error) {
         console.error(
           `Error sending image for screen ${i} to ${deviceIp}:`,

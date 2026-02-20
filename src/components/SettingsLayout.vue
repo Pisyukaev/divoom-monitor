@@ -54,7 +54,10 @@ function toggleSidebar() {
   } else {
     const savedWidth = localStorage.getItem('sidebarWidth');
     if (savedWidth) {
-      sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
+      const parsed = parseInt(savedWidth, 10);
+      if (!Number.isNaN(parsed)) {
+        sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+      }
     }
   }
 }
@@ -86,7 +89,10 @@ function stopResize() {
 onMounted(() => {
   const savedWidth = localStorage.getItem('sidebarWidth');
   if (savedWidth) {
-    sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
+    const parsed = parseInt(savedWidth, 10);
+    if (!Number.isNaN(parsed)) {
+      sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+    }
   }
 
 
