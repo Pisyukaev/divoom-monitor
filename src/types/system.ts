@@ -15,3 +15,17 @@ export interface SystemMetrics {
   memory_used: number;
   disks: DiskUsage[];
 }
+
+export interface LcdInfo {
+  lcd_clock_id: number;
+}
+
+export interface LcdIndependenceInfo {
+  lcd_independence: number;
+  lcd_list: LcdInfo[];
+}
+
+export interface LcdInfoResponse {
+  device_id: number;
+  independence_list: LcdIndependenceInfo[];
+}
