@@ -8,6 +8,9 @@ using System.Linq;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
+
+var cts = new CancellationTokenSource();
 
 var computer = new Computer
 {
@@ -20,7 +23,6 @@ var computer = new Computer
 
 computer.Open();
 
-// HTTP сервер на localhost:8765
 var listener = new HttpListener();
 listener.Prefixes.Add("http://localhost:8765/");
 
@@ -36,13 +38,26 @@ catch (Exception ex)
     return;
 }
 
-while (true)
+while (!cts.Token.IsCancellationRequested)
 {
     try
     {
-        var context = await listener.GetContextAsync();
+        var context = await listener.GetContextAsync().WaitAsync(cts.Token);
         var request = context.Request;
         var response = context.Response;
+
+        if (request.Url?.AbsolutePath == "/shutdown")
+        {
+            Console.Error.WriteLine("Shutdown request received, exiting...");
+            var shutdownMsg = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+            response.ContentType = "application/json";
+            response.ContentLength64 = shutdownMsg.Length;
+            response.StatusCode = 200;
+            await response.OutputStream.WriteAsync(shutdownMsg, 0, shutdownMsg.Length);
+            response.OutputStream.Close();
+            cts.Cancel();
+            break;
+        }
 
         var metrics = new SystemMetrics();
         float? cpuTemp = null;
@@ -50,7 +65,6 @@ while (true)
         float cpuUsageTotal = 0;
         int cpuCoreCount = 0;
 
-        // Получаем данные о памяти через Windows API
         var (memoryTotal, memoryUsed) = MemoryHelper.GetMemoryInfo();
 
         foreach (var hardware in computer.Hardware)
@@ -70,7 +84,6 @@ while (true)
                 switch (sensor.SensorType)
                 {
                     case SensorType.Temperature:
-                        // Фильтруем неправильные значения (диапазон: -30..200°C)
                         if (value < -30 || value > 200)
                         {
                             continue;
@@ -121,7 +134,6 @@ while (true)
             }
         }
         
-        // Поиск CPU температуры на материнской плате, если не найдена
         if (!cpuTemp.HasValue)
         {
             foreach (var hardware in computer.Hardware)
@@ -157,7 +169,6 @@ while (true)
             }
         }
         
-        // Получаем информацию о дисках
         var disks = new List<DiskUsage>();
         var drives = DriveInfo.GetDrives();
         foreach (var drive in drives)
@@ -184,7 +195,7 @@ while (true)
             }
             catch
             {
-                // Пропускаем диски с ошибками
+                // skip drives with errors
             }
         }
 
@@ -195,9 +206,7 @@ while (true)
         metrics.MemoryUsed = memoryUsed;
         metrics.Disks = disks;
 
-        var payload = metrics;
-
-        var json = JsonSerializer.Serialize(payload);
+        var json = JsonSerializer.Serialize(metrics);
         var buffer = Encoding.UTF8.GetBytes(json);
 
         response.ContentType = "application/json";
@@ -207,11 +216,19 @@ while (true)
         await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
         response.OutputStream.Close();
     }
+    catch (OperationCanceledException)
+    {
+        break;
+    }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Error handling request: {ex.Message}");
     }
 }
+
+listener.Stop();
+computer.Close();
+Console.Error.WriteLine("LibreHardwareMonitor service stopped.");
 
 class DiskUsage
 {

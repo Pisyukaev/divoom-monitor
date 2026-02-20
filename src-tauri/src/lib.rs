@@ -639,12 +639,10 @@ pub fn run() {
             setup_devtools(app);
             system_metrics::setup_sidecar_service();
 
-            // Останавливаем sidecar при закрытии окна
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { .. } = event {
-                        #[cfg(debug_assertions)]
-                        eprintln!("Window closing, stopping sidecar service...");
+                        eprintln!("[App] Window closing, stopping sidecar...");
                         system_metrics::stop_sidecar_service();
                     }
                 });

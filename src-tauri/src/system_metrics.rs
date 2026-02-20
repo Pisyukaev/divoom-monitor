@@ -144,7 +144,6 @@ fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
 }
 
 fn start_sidecar_service() -> Result<(), String> {
-    // Безопасная обертка для всех операций
     let result = std::panic::catch_unwind(|| {
         let sidecar_path = std::env::var("LHM_SIDECAR_PATH")
             .map_err(|_| "LHM_SIDECAR_PATH environment variable not set")?;
@@ -159,65 +158,105 @@ fn start_sidecar_service() -> Result<(), String> {
             ));
         }
 
-        // Проверяем, не запущен ли уже sidecar (простая TCP проверка порта)
         use std::net::{SocketAddr, TcpStream};
         use std::time::Duration as StdDuration;
 
-        // Безопасная проверка порта с таймаутом
         let addr: SocketAddr = "127.0.0.1:8765"
             .parse()
             .map_err(|_| "Failed to parse socket address")?;
 
-        let port_check = TcpStream::connect_timeout(&addr, StdDuration::from_millis(100));
-
-        if port_check.is_ok() {
-            return Ok(()); // Sidecar уже запущен
+        if TcpStream::connect_timeout(&addr, StdDuration::from_millis(100)).is_ok() {
+            eprintln!("[Sidecar] Already running on port 8765");
+            return Ok(());
         }
 
-        let mut process = Command::new(&resolved_path)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("Failed to start sidecar process: {}", e))?;
+        #[cfg(target_os = "windows")]
+        {
+            let path_str = resolved_path.to_string_lossy().to_string();
+            let working_dir = resolved_path
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
 
-        // Проверяем, что процесс запустился успешно
-        match process.try_wait() {
-            Ok(Some(status)) => {
-                // Читаем stderr для диагностики
-                let mut stderr = String::new();
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+            let mut process = Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-WindowStyle",
+                    "Hidden",
+                    "-Command",
+                    &format!(
+                        "Start-Process -FilePath '{}' -WorkingDirectory '{}' -Verb RunAs -WindowStyle Hidden",
+                        path_str, working_dir
+                    ),
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("Failed to launch elevated sidecar: {}", e))?;
+
+            let exit_status = process
+                .wait()
+                .map_err(|e| format!("Failed to wait for elevation launcher: {}", e))?;
+
+            if !exit_status.success() {
+                let mut stderr_output = String::new();
                 if let Some(mut child_stderr) = process.stderr.take() {
                     use std::io::Read;
-                    let _ = std::io::BufReader::new(&mut child_stderr).read_to_string(&mut stderr);
+                    let _ = child_stderr.read_to_string(&mut stderr_output);
                 }
                 return Err(format!(
-                    "Sidecar process exited immediately with status: {:?}. Stderr: {}",
-                    status, stderr
+                    "Elevated launch failed (status: {:?}). Stderr: {}",
+                    exit_status, stderr_output
                 ));
-            }
-            Ok(None) => {
-                // Процесс работает - это хорошо
-            }
-            Err(e) => {
-                return Err(format!("Failed to check sidecar process status: {}", e));
             }
         }
 
-        // Сохраняем handle процесса
-        let mut sidecar_guard = SIDECAR_PROCESS
-            .lock()
-            .map_err(|e| format!("Failed to lock sidecar process mutex: {}", e))?;
-        *sidecar_guard = Some(process);
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut process = Command::new(&resolved_path)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("Failed to start sidecar process: {}", e))?;
 
-        // Даем серверу время на запуск
-        std::thread::sleep(Duration::from_millis(1000));
+            match process.try_wait() {
+                Ok(Some(status)) => {
+                    let mut stderr_output = String::new();
+                    if let Some(mut child_stderr) = process.stderr.take() {
+                        use std::io::Read;
+                        let _ = child_stderr.read_to_string(&mut stderr_output);
+                    }
+                    return Err(format!(
+                        "Sidecar exited immediately (status: {:?}). Stderr: {}",
+                        status, stderr_output
+                    ));
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    return Err(format!("Failed to check sidecar process status: {}", e));
+                }
+            }
 
-        // Проверяем, что сервер действительно запустился (простая TCP проверка)
-        let check_addr: SocketAddr = "127.0.0.1:8765"
-            .parse()
-            .map_err(|_| "Failed to parse socket address")?;
-        let _ = TcpStream::connect_timeout(&check_addr, StdDuration::from_millis(500));
+            let mut sidecar_guard = SIDECAR_PROCESS
+                .lock()
+                .map_err(|e| format!("Failed to lock sidecar mutex: {}", e))?;
+            *sidecar_guard = Some(process);
+        }
 
-        Ok(())
+        // Wait for server to become available (up to 5 seconds)
+        for i in 0..10 {
+            std::thread::sleep(Duration::from_millis(500));
+            if TcpStream::connect_timeout(&addr, StdDuration::from_millis(200)).is_ok() {
+                eprintln!("[Sidecar] Started successfully after {}ms", (i + 1) * 500);
+                return Ok(());
+            }
+        }
+
+        Err("Sidecar started but did not respond on port 8765 within 5 seconds".to_string())
     });
 
     match result {
@@ -370,13 +409,63 @@ pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
 }
 
 pub fn stop_sidecar_service() {
-    let mut sidecar_guard = match SIDECAR_PROCESS.lock() {
-        Ok(guard) => guard,
-        Err(_) => return,
-    };
+    eprintln!("[Sidecar] Stopping service...");
 
-    if let Some(mut child) = sidecar_guard.take() {
-        let _ = child.kill();
+    // Try graceful HTTP shutdown first (works regardless of privilege level)
+    let shutdown_ok = std::panic::catch_unwind(|| {
+        use std::io::{Read, Write};
+        use std::net::{SocketAddr, TcpStream};
+        use std::time::Duration as StdDuration;
+
+        let addr: SocketAddr = match "127.0.0.1:8765".parse() {
+            Ok(a) => a,
+            Err(_) => return false,
+        };
+        let mut stream =
+            match TcpStream::connect_timeout(&addr, StdDuration::from_millis(500)) {
+                Ok(s) => s,
+                Err(_) => return false,
+            };
+        let _ = stream.set_read_timeout(Some(StdDuration::from_secs(2)));
+        let _ = stream.set_write_timeout(Some(StdDuration::from_secs(2)));
+
+        let request = "GET /shutdown HTTP/1.1\r\nHost: localhost:8765\r\nConnection: close\r\n\r\n";
+        if stream.write_all(request.as_bytes()).is_err() {
+            return false;
+        }
+
+        let mut buf = [0u8; 256];
+        let _ = stream.read(&mut buf);
+        eprintln!("[Sidecar] Graceful shutdown request sent");
+        true
+    })
+    .unwrap_or(false);
+
+    // Kill the child handle if we have one (non-elevated launch)
+    if let Ok(mut guard) = SIDECAR_PROCESS.lock() {
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill();
+            eprintln!("[Sidecar] Child process killed");
+            return;
+        }
+    }
+
+    // If HTTP shutdown didn't work, force-kill by process name (Windows)
+    if !shutdown_ok {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+            let _ = Command::new("taskkill")
+                .args(["/F", "/IM", "HardwareMonitorCli.exe"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .and_then(|mut c| c.wait());
+            eprintln!("[Sidecar] Force-killed via taskkill");
+        }
     }
 }
 
@@ -396,7 +485,10 @@ pub fn setup_sidecar_service() {
     std::thread::spawn(|| {
         let result = std::panic::catch_unwind(|| {
             std::thread::sleep(Duration::from_millis(500));
-            let _ = start_sidecar_service();
+            match start_sidecar_service() {
+                Ok(()) => eprintln!("[Sidecar] Service is ready"),
+                Err(e) => eprintln!("[Sidecar] Failed to start: {}", e),
+            }
 
             if let Ok(mut guard) = SIDECAR_STARTING.lock() {
                 *guard = false;
@@ -404,6 +496,7 @@ pub fn setup_sidecar_service() {
         });
 
         if result.is_err() {
+            eprintln!("[Sidecar] Panic during startup");
             if let Ok(mut guard) = SIDECAR_STARTING.lock() {
                 *guard = false;
             }
