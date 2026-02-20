@@ -4,7 +4,14 @@ import { useRoute } from 'vue-router';
 import { Refresh, Upload, Connection } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
-import { getSystemMetrics, getLcdInfo, activatePcMonitor, sendPcMetrics } from '../api/system';
+import { getSystemMetrics, getLcdInfo, activatePcMonitor } from '../api/system';
+import {
+  savePcMonitorSettings,
+  loadPcMonitorSettings,
+  startPcMonitorLoop,
+  stopPcMonitorLoop,
+  isPcMonitorRunning,
+} from '../composables/usePcMonitorSend';
 import type { DiskUsage, SystemMetrics, LcdInfoResponse, LcdIndependenceInfo } from '../types/system';
 
 const route = useRoute();
@@ -28,10 +35,10 @@ const lcdError = ref<string | null>(null);
 const selectedScreen = ref(0);
 const autoSendEnabled = ref(false);
 const isActivating = ref(false);
-const lastSentAt = ref<Date | null>(null);
 const sendError = ref<string | null>(null);
 
 let refreshTimer: number | undefined;
+let settingsLoaded = false;
 
 const memoryUsagePercent = computed(() => {
   if (!metrics.value || metrics.value.memory_total === 0) {
@@ -93,45 +100,12 @@ const formatTemperature = (value: number | null) => {
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
-function buildDispData(m: SystemMetrics): string[] {
-  const cpuUsage = `${Math.round(m.cpu_usage)}%`;
-  const gpuUsage = '0%';
-  const cpuTemp = m.cpu_temperature !== null ? `${Math.round(m.cpu_temperature)} C` : 'N/A';
-  const gpuTemp = m.gpu_temperature !== null ? `${Math.round(m.gpu_temperature)} C` : 'N/A';
-  const ramUsage = `${Math.round(m.memory_total > 0 ? (m.memory_used / m.memory_total) * 100 : 0)}%`;
-
-  let hddUsage = '0%';
-  if (m.disks.length > 0) {
-    const maxPct = Math.max(...m.disks.map((d) => d.usage_percent));
-    hddUsage = `${Math.round(maxPct)}%`;
-  }
-
-  return [cpuUsage, gpuUsage, cpuTemp, gpuTemp, ramUsage, hddUsage];
-}
-
-async function sendMetricsToDevice() {
-  if (!deviceIp.value || !metrics.value) return;
-
-  sendError.value = null;
-  try {
-    const dispData = buildDispData(metrics.value);
-    await sendPcMetrics(deviceIp.value, selectedScreen.value, dispData);
-    lastSentAt.value = new Date();
-  } catch (err) {
-    sendError.value = err instanceof Error ? err.message : 'Ошибка отправки метрик';
-  }
-}
-
 const loadMetrics = async () => {
   isLoading.value = true;
   error.value = null;
   try {
     metrics.value = await getSystemMetrics();
     lastUpdated.value = new Date();
-
-    if (autoSendEnabled.value) {
-      await sendMetricsToDevice();
-    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Не удалось получить метрики системы';
   } finally {
@@ -176,13 +150,39 @@ async function handleActivate() {
   }
 }
 
-watch(autoSendEnabled, (enabled) => {
-  if (!enabled) {
-    sendError.value = null;
+function persistAndSync(enabled: boolean, lcdIndex: number) {
+  if (!deviceIp.value) return;
+
+  savePcMonitorSettings(deviceIp.value, { lcdIndex, enabled });
+
+  if (enabled) {
+    startPcMonitorLoop(deviceIp.value, lcdIndex);
+  } else {
+    stopPcMonitorLoop(deviceIp.value);
   }
+}
+
+watch(autoSendEnabled, (enabled) => {
+  if (!settingsLoaded) return;
+  sendError.value = null;
+  persistAndSync(enabled, selectedScreen.value);
+});
+
+watch(selectedScreen, (newIndex) => {
+  if (!settingsLoaded || !autoSendEnabled.value) return;
+  persistAndSync(true, newIndex);
 });
 
 onMounted(() => {
+  if (deviceIp.value) {
+    const saved = loadPcMonitorSettings(deviceIp.value);
+    if (saved) {
+      selectedScreen.value = saved.lcdIndex;
+      autoSendEnabled.value = saved.enabled && isPcMonitorRunning(deviceIp.value);
+    }
+  }
+  settingsLoaded = true;
+
   loadMetrics();
   loadLcdInfo();
   refreshTimer = window.setInterval(loadMetrics, 2000);
@@ -317,10 +317,7 @@ onUnmounted(() => {
           <el-icon color="var(--el-color-success)">
             <Upload />
           </el-icon>
-          <span v-if="lastSentAt">
-            Последняя отправка: {{ lastSentAt.toLocaleTimeString() }}
-          </span>
-          <span v-else>Ожидание первой отправки...</span>
+          <span>Метрики отправляются в фоновом режиме каждые 2 сек.</span>
         </div>
 
         <div v-if="metrics && autoSendEnabled" class="send-preview">
