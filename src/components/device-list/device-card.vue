@@ -1,19 +1,19 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import type { DivoomDevice } from '../../types/device';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   device: DivoomDevice;
   onClick: () => void
 }>();
 
-
-
 function getSignalBarActive(
   barIndex: number,
   signalStrength: number | null
 ): boolean {
   if (signalStrength === null) return false;
-  // barIndex is 1-based (v-for="i in 4"), convert to 0-based
   const threshold = -30 - (barIndex - 1) * 20;
   return signalStrength >= threshold;
 }
@@ -28,29 +28,29 @@ function getSignalBarActive(
       <div class="device-header">
         <h3 class="device-name">{{ device.name }}</h3>
         <el-tag :type="device.is_connected ? 'success' : 'danger'" size="small">
-          {{ device.is_connected ? 'Подключено' : 'Не подключено' }}
+          {{ device.is_connected ? t('deviceCard.connected') : t('deviceCard.disconnected') }}
         </el-tag>
       </div>
     </template>
 
     <el-descriptions :column="1" border size="small">
-      <el-descriptions-item label="Тип устройства">
+      <el-descriptions-item :label="t('deviceCard.deviceType')">
         {{ device.device_type }}
       </el-descriptions-item>
 
-      <el-descriptions-item v-if="device.ip_address" label="IP адрес">
+      <el-descriptions-item v-if="device.ip_address" :label="t('deviceCard.ipAddress')">
         <el-text>{{ device.ip_address }}</el-text>
       </el-descriptions-item>
 
-      <el-descriptions-item v-if="device.mac_address" label="MAC адрес">
+      <el-descriptions-item v-if="device.mac_address" :label="t('deviceCard.macAddress')">
         <el-text>{{ device.mac_address }}</el-text>
       </el-descriptions-item>
 
-      <el-descriptions-item v-if="device.device_id" label="ID">
+      <el-descriptions-item v-if="device.device_id" :label="t('deviceCard.id')">
         <el-text>{{ device.device_id }}</el-text>
       </el-descriptions-item>
 
-      <el-descriptions-item v-if="device.signal_strength !== null" label="Уровень сигнала">
+      <el-descriptions-item v-if="device.signal_strength !== null" :label="t('deviceCard.signalStrength')">
         <div class="signal-indicator">
           <el-text>{{ device.signal_strength }} dBm</el-text>
           <div class="signal-bars">

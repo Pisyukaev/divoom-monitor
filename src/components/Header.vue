@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { Setting } from '@element-plus/icons-vue';
 
 const router = useRouter();
+const { t } = useI18n();
 
 function openSettings() {
     router.push('/settings');
@@ -11,9 +13,9 @@ function openSettings() {
 
 <template>
     <header class="app-header">
-        <h1>Divoom Device Monitor</h1>
+        <h1>{{ t('app.title') }}</h1>
         <div class="actions">
-            <el-tooltip content="Настройки приложения" placement="bottom">
+            <el-tooltip :content="t('header.appSettings')" placement="bottom">
                 <el-button :icon="Setting" circle @click="openSettings" />
             </el-tooltip>
         </div>

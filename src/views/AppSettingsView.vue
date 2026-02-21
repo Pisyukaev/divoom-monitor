@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { ArrowLeft, Moon, Sunny } from '@element-plus/icons-vue';
 import { useTheme } from '../composables/useTheme';
+import { saveLocale, type Locale } from '../i18n';
 
 const router = useRouter();
+const { t, locale } = useI18n();
 const { isDark, toggleTheme } = useTheme();
 
 const autoStartEnabled = ref(false);
@@ -14,7 +17,17 @@ const autoStartLoading = ref(false);
 const closeToTray = ref(true);
 const closeToTrayLoading = ref(false);
 
-const themeLabel = computed(() => isDark.value ? 'Тёмная' : 'Светлая');
+const themeLabel = computed(() => isDark.value ? t('appSettings.dark') : t('appSettings.light'));
+
+const languageOptions = [
+  { value: 'ru', label: 'Русский' },
+  { value: 'en', label: 'English' },
+];
+
+function handleLocaleChange(value: string) {
+  locale.value = value;
+  saveLocale(value as Locale);
+}
 
 onMounted(async () => {
   try {
@@ -69,21 +82,29 @@ function goBack() {
   <div class="app-settings-page">
     <header class="settings-header">
       <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
-      <h2>Настройки приложения</h2>
+      <h2>{{ t('appSettings.title') }}</h2>
     </header>
 
     <div class="settings-content">
       <el-card class="settings-card" shadow="hover">
         <template #header>
-          <span class="card-title">Внешний вид</span>
+          <span class="card-title">{{ t('appSettings.appearance') }}</span>
         </template>
 
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="Тема приложения">
+          <el-descriptions-item :label="t('appSettings.appTheme')">
             <div class="setting-row">
               <span class="setting-value-label">{{ themeLabel }}</span>
               <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleTheme"
-                :title="isDark ? 'Переключить на светлую тему' : 'Переключить на тёмную тему'" />
+                :title="isDark ? t('appSettings.switchToLight') : t('appSettings.switchToDark')" />
+            </div>
+          </el-descriptions-item>
+
+          <el-descriptions-item :label="t('appSettings.languageLabel')">
+            <div class="setting-row">
+              <el-select :model-value="locale" @change="handleLocaleChange" style="width: 200px">
+                <el-option v-for="opt in languageOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
           </el-descriptions-item>
         </el-descriptions>
@@ -91,21 +112,21 @@ function goBack() {
 
       <el-card class="settings-card" shadow="hover">
         <template #header>
-          <span class="card-title">Поведение</span>
+          <span class="card-title">{{ t('appSettings.behavior') }}</span>
         </template>
 
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="Автозапуск при старте Windows">
+          <el-descriptions-item :label="t('appSettings.autostart')">
             <div class="setting-row">
-              <span class="setting-description">Приложение запустится автоматически при входе в систему</span>
+              <span class="setting-description">{{ t('appSettings.autostartDescription') }}</span>
               <el-switch v-model="autoStartEnabled" :loading="autoStartLoading"
                 @change="(val: string | number | boolean) => handleAutoStartChange(Boolean(val))" />
             </div>
           </el-descriptions-item>
 
-          <el-descriptions-item label="Сворачивать в трей при закрытии">
+          <el-descriptions-item :label="t('appSettings.closeToTray')">
             <div class="setting-row">
-              <span class="setting-description">Приложение свернётся в системный трей вместо полного закрытия</span>
+              <span class="setting-description">{{ t('appSettings.closeToTrayDescription') }}</span>
               <el-switch v-model="closeToTray" :loading="closeToTrayLoading"
                 @change="(val: string | number | boolean) => handleCloseToTrayChange(Boolean(val))" />
             </div>

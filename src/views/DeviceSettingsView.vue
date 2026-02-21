@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import SettingsLayout from '../components/SettingsLayout.vue';
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -7,7 +10,7 @@ import SettingsLayout from '../components/SettingsLayout.vue';
     <router-view v-slot="{ Component }">
       <component :is="Component" v-if="Component" />
       <div v-else class="loading-placeholder">
-        <p>Загрузка...</p>
+        <p>{{ t('deviceSettings.loading') }}</p>
       </div>
     </router-view>
   </SettingsLayout>

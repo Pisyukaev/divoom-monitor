@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import ScreenSettings from '../components/settings/screen-settings.vue';
 
 const route = useRoute();
+const { t } = useI18n();
 
 const deviceId = computed(() => route.params.id as string);
 
@@ -14,14 +16,12 @@ const deviceIp = computed(() => {
   }
   return '';
 });
-
 </script>
 
 <template>
   <div class="screens-content">
     <ScreenSettings v-if="deviceId && deviceIp" :device-id="deviceId" :device-ip="deviceIp" />
-    <el-alert v-else title="Настройки экранов доступны только для устройств Times Gate" type="info" :closable="false"
-      show-icon />
+    <el-alert v-else :title="t('displaySettings.timesGateOnly')" type="info" :closable="false" show-icon />
   </div>
 </template>
 

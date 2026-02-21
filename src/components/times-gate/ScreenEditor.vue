@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
 import TextElement from './TextElement.vue';
 import type { ScreenConfig, TextElement as TextElementType } from '../../types/screen';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   config: ScreenConfig;
@@ -54,10 +57,10 @@ async function handleLoadLocalImage() {
         },
       };
 
-      ElMessage.success('Изображение загружено');
+      ElMessage.success(t('screenEditor.imageLoaded'));
     } catch (error) {
       console.error('Error uploading image:', error);
-      ElMessage.error(`Ошибка загрузки изображения: ${error}`);
+      ElMessage.error(t('screenEditor.imageLoadError', { error: String(error) }));
     } finally {
       isLoadingImage.value = false;
       emit('update:config', localConfig.value);
@@ -69,7 +72,7 @@ async function handleLoadLocalImage() {
 
 async function handleLoadImageFromUrl() {
   if (!imageUrlInput.value.trim()) {
-    ElMessage.warning('Введите URL изображения');
+    ElMessage.warning(t('screenEditor.enterImageUrl'));
     return;
   }
 
@@ -89,11 +92,11 @@ async function handleLoadImageFromUrl() {
       },
     };
 
-    ElMessage.success('Изображение загружено');
+    ElMessage.success(t('screenEditor.imageLoaded'));
     imageUrlInput.value = '';
   } catch (error) {
     console.error('Error uploading image:', error);
-    ElMessage.error(`Ошибка загрузки изображения: ${error}`);
+    ElMessage.error(t('screenEditor.imageLoadError', { error: String(error) }));
   } finally {
     isLoadingImage.value = false;
     emit('update:config', localConfig.value);
@@ -115,7 +118,7 @@ function handleAddText(text: TextElementType) {
     texts: [...localConfig.value.texts, { ...text, color: text.color?.toUpperCase() }],
   };
   handleSendTextToDevice(text);
-  ElMessage.success('Текст добавлен');
+  ElMessage.success(t('screenEditor.textAdded'));
   emit('update:config', localConfig.value);
 }
 
@@ -191,10 +194,10 @@ async function handleSendTextToDevice(text: TextElementType) {
         text_width: text.textWidth,
       },
     });
-    ElMessage.success('Текст отправлен на устройство');
+    ElMessage.success(t('screenEditor.textSent'));
   } catch (error) {
     console.error('Error sending text:', error);
-    ElMessage.error(`Ошибка отправки текста: ${error}`);
+    ElMessage.error(t('screenEditor.textSendError', { error: String(error) }));
   } finally {
     emit('update:config', localConfig.value);
   }
@@ -206,25 +209,25 @@ async function handleSendTextToDevice(text: TextElementType) {
     <div class="editor-controls">
       <el-card shadow="hover">
         <template #header>
-          <span>Изображение</span>
+          <span>{{ t('screenEditor.image') }}</span>
         </template>
 
         <div class="control-section">
           <el-button type="primary" @click="handleLoadLocalImage" :loading="isLoadingImage"
             style="width: 100%; margin-bottom: 10px">
-            Загрузить с компьютера
+            {{ t('screenEditor.loadFromComputer') }}
           </el-button>
 
-          <el-input v-model="imageUrlInput" placeholder="URL изображения" style="margin-bottom: 10px">
+          <el-input v-model="imageUrlInput" :placeholder="t('screenEditor.imageUrl')" style="margin-bottom: 10px">
             <template #append>
               <el-button @click="handleLoadImageFromUrl" :loading="isLoadingImage" :disabled="!imageUrlInput.trim()">
-                Загрузить
+                {{ t('screenEditor.load') }}
               </el-button>
             </template>
           </el-input>
 
           <el-button v-if="localConfig.image" type="danger" @click="handleRemoveImage" style="width: 100%">
-            Удалить изображение
+            {{ t('screenEditor.removeImage') }}
           </el-button>
         </div>
       </el-card>
@@ -236,7 +239,7 @@ async function handleSendTextToDevice(text: TextElementType) {
     <div class="editor-preview">
       <el-card shadow="hover">
         <template #header>
-          <span>Предпросмотр экрана {{ config.screenIndex + 1 }}</span>
+          <span>{{ t('screenEditor.screenPreview', { n: config.screenIndex + 1 }) }}</span>
         </template>
         <div class="preview-container">
           <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText"

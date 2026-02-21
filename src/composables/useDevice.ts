@@ -1,8 +1,10 @@
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
 import type { DivoomDevice, DeviceSettings } from '../types/device';
 
 export function useDevice() {
+  const { t } = useI18n();
   const device = ref<DivoomDevice | null>(null);
   const settings = ref<DeviceSettings | null>(null);
   const isLoadingSettings = ref(false);
@@ -25,7 +27,6 @@ export function useDevice() {
     settingsError.value = null;
     try {
       const decodedId = decodeDeviceId(id);
-      // Try to get device info by IP address
       if (/^(\d{1,3}\.){3}\d{1,3}$/.test(decodedId)) {
         const deviceInfo = await invoke<DeviceSettings>('get_device_info', {
           ipAddress: decodedId,
@@ -35,12 +36,12 @@ export function useDevice() {
         return deviceInfo;
       }
       isLoadingSettings.value = false;
-      settingsError.value = 'Неверный формат IP адреса';
+      settingsError.value = t('commonSettings.invalidIp');
       return null;
     } catch (error) {
       console.error('Error fetching device:', error);
       isLoadingSettings.value = false;
-      settingsError.value = error instanceof Error ? error.message : 'Ошибка загрузки настроек устройства';
+      settingsError.value = error instanceof Error ? error.message : t('commonSettings.loadError');
       return null;
     }
   }

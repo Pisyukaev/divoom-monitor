@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { TEXT_ALIGNMENT_OPTIONS, FONT_OPTIONS } from '../../constants';
 import type { TextElement as TextElementType } from '../../types/screen';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   text: TextElementType | null;
@@ -61,17 +64,17 @@ function handleSubmitText() {
 <template>
   <el-card shadow="hover" style="margin-top: 20px">
     <template #header>
-      <span>Редактирование текста</span>
+      <span>{{ t('textElement.editText') }}</span>
     </template>
     <div class="control-section">
-      <label class="label">Текст</label>
+      <label class="label">{{ t('textElement.text') }}</label>
       <div class="text-container">
-        <el-input v-model="currentText.content" placeholder="Содержимое текста"
+        <el-input v-model="currentText.content" :placeholder="t('textElement.textContent')"
           @input="(content) => handleChangeTextProp('content', content)" />
 
         <el-color-picker v-model="currentText.color" @change="(color) => handleChangeTextProp('color', color)" />
       </div>
-      <label class="label">Тип шрифта</label>
+      <label class="label">{{ t('textElement.fontType') }}</label>
       <el-select-v2 :options="FONT_OPTIONS" v-model="currentText.font" class="font-selector"
         @change="(font) => handleChangeTextProp('font', font)" />
 
@@ -82,19 +85,18 @@ function handleSubmitText() {
         </el-radio-button>
       </el-radio-group>
 
-      <label class="label">Ширина
-        текста</label>
+      <label class="label">{{ t('textElement.textWidth') }}</label>
       <el-input-number v-model="currentText.textWidth" :min="16" :max="64" class="input-number"
         @change="(textWidth) => handleChangeTextProp('textWidth', textWidth)" />
 
       <div class="input-number-container">
         <label class="label">
-          Позиция (X)
+          {{ t('textElement.positionX') }}
         </label>
         <el-input-number v-model="currentText.x" :min="0" :max="128" class="input-number"
           @change="(x) => handleChangeTextProp('x', x)" />
         <label class="label">
-          Позиция (Y)
+          {{ t('textElement.positionY') }}
         </label>
         <el-input-number v-model="currentText.y" :min="0" :max="128" class="input-number"
           @change="(y) => handleChangeTextProp('y', y)" />
@@ -102,7 +104,7 @@ function handleSubmitText() {
 
       <el-button type="success" @click="handleSubmitText" :disabled="!isEditing && availableTextIds.length === 0"
         class="button">
-        {{ !isEditing ? 'Добавить текст' : 'Отправить на устройство' }}
+        {{ !isEditing ? t('textElement.addText') : t('textElement.sendToDevice') }}
       </el-button>
     </div>
   </el-card>
