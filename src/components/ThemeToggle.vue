@@ -17,8 +17,7 @@ const { isDark, toggleTheme } = useTheme();
 
 <style scoped>
 .theme-toggle {
-  position: absolute;
-  right: 20px;
+  flex-shrink: 0;
 }
 </style>
 

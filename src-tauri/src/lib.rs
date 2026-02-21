@@ -691,6 +691,11 @@ pub fn run() {
                         let _ = window_clone.hide();
                     }
                 });
+
+                let args: Vec<String> = std::env::args().collect();
+                if args.iter().any(|a| a == "--minimized") {
+                    let _ = window.hide();
+                }
             }
 
             Ok(())
@@ -698,6 +703,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .invoke_handler(tauri::generate_handler![
             scan_devices,
             get_device_info,
