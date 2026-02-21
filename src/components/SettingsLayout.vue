@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router';
 import { ArrowLeft, Setting, Monitor, Fold, Expand, Odometer } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
-import ThemeToggle from './ThemeToggle.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -155,7 +154,6 @@ onUnmounted(() => {
       <div class="content-header">
         <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
         <h2>{{ 'Настройки устройства' }}</h2>
-        <ThemeToggle />
       </div>
 
       <div class="content-area">

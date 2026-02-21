@@ -1,34 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
-import ThemeToggle from './ThemeToggle.vue';
+import { useRouter } from 'vue-router';
+import { Setting } from '@element-plus/icons-vue';
 
-const autoStartEnabled = ref(false);
-const autoStartLoading = ref(false);
+const router = useRouter();
 
-onMounted(async () => {
-    try {
-        autoStartEnabled.value = await isEnabled();
-    } catch (err) {
-        console.error('Failed to check autostart status:', err);
-    }
-});
-
-async function handleAutoStartChange(value: boolean) {
-    autoStartLoading.value = true;
-    try {
-        if (value) {
-            await enable();
-        } else {
-            await disable();
-        }
-        autoStartEnabled.value = await isEnabled();
-    } catch (err) {
-        console.error('Failed to toggle autostart:', err);
-        autoStartEnabled.value = !value;
-    } finally {
-        autoStartLoading.value = false;
-    }
+function openSettings() {
+    router.push('/settings');
 }
 </script>
 
@@ -36,11 +13,9 @@ async function handleAutoStartChange(value: boolean) {
     <header class="app-header">
         <h1>Divoom Device Monitor</h1>
         <div class="actions">
-            <el-tooltip content="Автозагрузка при старте Windows" placement="bottom">
-                <el-switch v-model="autoStartEnabled" :loading="autoStartLoading"
-                    @change="handleAutoStartChange" />
+            <el-tooltip content="Настройки приложения" placement="bottom">
+                <el-button :icon="Setting" circle @click="openSettings" />
             </el-tooltip>
-            <ThemeToggle />
         </div>
     </header>
 </template>
