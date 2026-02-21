@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ScreenManager from '../times-gate/ScreenManager.vue';
 
-const props = defineProps<{
+defineProps<{
   deviceId: string;
   deviceIp: string;
 }>();

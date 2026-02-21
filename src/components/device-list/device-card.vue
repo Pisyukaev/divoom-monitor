@@ -4,7 +4,7 @@ import type { DivoomDevice } from '../../types/device';
 
 const { t } = useI18n();
 
-const props = defineProps<{
+defineProps<{
   device: DivoomDevice;
   onClick: () => void
 }>();
