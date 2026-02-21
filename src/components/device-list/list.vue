@@ -14,7 +14,6 @@ const router = useRouter();
 const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
 const error = ref<string | null>(null);
-const selectedDevice = ref<DivoomDevice | null>(null)
 
 
 async function scan() {
@@ -33,7 +32,6 @@ async function scan() {
 
 
 function handleCardClick(device: DivoomDevice) {
-  selectedDevice.value = device
   router.push(`/device/${device.ip_address}`);
 }
 

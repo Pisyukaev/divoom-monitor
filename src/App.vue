@@ -2,9 +2,11 @@
 import { onMounted } from 'vue';
 import { RouterView } from 'vue-router';
 import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
+import { startPcMonitorForAllDevices } from './composables/usePcMonitorSend';
 
-onMounted(async () => {
-  await sendConfigsToAllDevices();
+onMounted(() => {
+  startPcMonitorForAllDevices();
+  sendConfigsToAllDevices();
 });
 </script>
 

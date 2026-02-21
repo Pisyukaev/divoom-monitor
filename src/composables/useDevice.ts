@@ -26,7 +26,7 @@ export function useDevice() {
     try {
       const decodedId = decodeDeviceId(id);
       // Try to get device info by IP address
-      if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      if (/^(\d{1,3}\.){3}\d{1,3}$/.test(decodedId)) {
         const deviceInfo = await invoke<DeviceSettings>('get_device_info', {
           ipAddress: decodedId,
         });

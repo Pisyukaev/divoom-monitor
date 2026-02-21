@@ -239,7 +239,7 @@ async function handleSendTextToDevice(text: TextElementType) {
           <span>Предпросмотр экрана {{ config.screenIndex + 1 }}</span>
         </template>
         <div class="preview-container">
-          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText" "
+          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText"
             @update:text-position="handleUpdateTextPosition" @text-delete="handleRemoveText"
             @text-click="handleTextClick" />
         </div>

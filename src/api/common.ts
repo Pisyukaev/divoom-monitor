@@ -2,14 +2,11 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { DivoomDevice } from '../types/device';
 
-export const scanDevices = async () => {
-  let foundDevices: DivoomDevice[] = [];
+export const scanDevices = async (): Promise<DivoomDevice[]> => {
   try {
-    foundDevices = await invoke<DivoomDevice[]>('scan_devices');
-    return foundDevices;
+    return await invoke<DivoomDevice[]>('scan_devices');
   } catch (err) {
     console.error('Error scanning devices:', err);
-  } finally {
-    return foundDevices;
+    return [];
   }
 };

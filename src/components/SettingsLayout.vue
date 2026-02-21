@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { ArrowLeft, Setting, Monitor, Fold, Expand } from '@element-plus/icons-vue';
+import { ArrowLeft, Setting, Monitor, Fold, Expand, Odometer } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
 import ThemeToggle from './ThemeToggle.vue';
@@ -28,6 +28,8 @@ const activeMenu = computed(() => {
     return 'common';
   } else if (path.includes('/display')) {
     return 'display';
+  } else if (path.includes('/system')) {
+    return 'system';
   }
   return 'common';
 });
@@ -52,7 +54,10 @@ function toggleSidebar() {
   } else {
     const savedWidth = localStorage.getItem('sidebarWidth');
     if (savedWidth) {
-      sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
+      const parsed = parseInt(savedWidth, 10);
+      if (!Number.isNaN(parsed)) {
+        sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+      }
     }
   }
 }
@@ -84,7 +89,10 @@ function stopResize() {
 onMounted(() => {
   const savedWidth = localStorage.getItem('sidebarWidth');
   if (savedWidth) {
-    sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parseInt(savedWidth)));
+    const parsed = parseInt(savedWidth, 10);
+    if (!Number.isNaN(parsed)) {
+      sidebarWidth.value = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, parsed));
+    }
   }
 
 
@@ -125,6 +133,14 @@ onUnmounted(() => {
           </el-icon>
           <template #title>
             <span>Настройки экранов</span>
+          </template>
+        </el-menu-item>
+        <el-menu-item index="system">
+          <el-icon>
+            <Odometer />
+          </el-icon>
+          <template #title>
+            <span>Состояние системы</span>
           </template>
         </el-menu-item>
       </el-menu>

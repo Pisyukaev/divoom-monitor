@@ -25,31 +25,34 @@ const newText = ref<TextElementType>({
   textWidth: 64,
 });
 
+const isEditing = computed(() => props.text !== null);
+
 const currentText = computed(() => {
   return props.text ?? newText.value;
 });
 
-
+const availableTextIds = computed(() => [...props.textIds]);
 
 function handleChangeTextProp<T extends keyof TextElementType,
   V extends TextElementType[T] | undefined | null>(prop: T, content: V) {
-  if (!content) {
-    return
-  }
-  currentText.value[prop] = content;
-
-  if (!props.text) {
-    return
+  if (content === undefined || content === null) {
+    return;
   }
 
-  emit('update:text', currentText.value);
+  if (isEditing.value) {
+    emit('update:text', { ...currentText.value, [prop]: content });
+  } else {
+    newText.value = { ...newText.value, [prop]: content };
+  }
 }
 
 function handleSubmitText() {
-  if (props.text) {
+  if (isEditing.value) {
     emit('submit:text', currentText.value);
   } else {
-    emit('add:text', { ...currentText.value, id: props.textIds.shift()! });
+    const nextId = availableTextIds.value[0];
+    if (nextId === undefined) return;
+    emit('add:text', { ...currentText.value, id: nextId });
   }
 }
 
@@ -97,9 +100,9 @@ function handleSubmitText() {
           @change="(y) => handleChangeTextProp('y', y)" />
       </div>
 
-      <el-button type="success" @click="handleSubmitText" :disabled="!props.text && props.textIds.length === 0"
+      <el-button type="success" @click="handleSubmitText" :disabled="!isEditing && availableTextIds.length === 0"
         class="button">
-        {{ !props.text ? 'Добавить текст' : 'Отправить на устройство' }}
+        {{ !isEditing ? 'Добавить текст' : 'Отправить на устройство' }}
       </el-button>
     </div>
   </el-card>

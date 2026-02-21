@@ -1,3 +1,5 @@
+mod system_metrics;
+
 use base64::{engine::general_purpose, Engine as _};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageEncoder};
@@ -57,6 +59,23 @@ pub struct TextConfig {
     pub color: Option<String>,
     pub alignment: Option<u8>,
     pub text_width: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LcdInfo {
+    pub lcd_clock_id: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LcdIndependenceInfo {
+    pub lcd_independence: u64,
+    pub lcd_list: Vec<LcdInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LcdInfoResponse {
+    pub device_id: u64,
+    pub independence_list: Vec<LcdIndependenceInfo>,
 }
 
 async fn send_command(ip: &str, command: &serde_json::Value) -> Result<serde_json::Value, String> {
@@ -479,10 +498,125 @@ async fn set_screen_text(
     Ok(())
 }
 
+#[tauri::command]
+async fn get_lcd_info(ip_address: String) -> Result<LcdInfoResponse, String> {
+    let devices = discover_via_divoom_api().await?;
+
+    let device = devices
+        .iter()
+        .find(|d| d.ip_address.as_deref() == Some(&ip_address))
+        .ok_or_else(|| format!("Device with IP {} not found", ip_address))?;
+
+    let device_id = device.device_id.ok_or("Device has no ID")?;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let url = format!(
+        "https://app.divoom-gz.com/Channel/Get5LcdInfoV2?DeviceType=LCD&DeviceId={}",
+        device_id
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to request LCD info: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "LCD info API returned status: {}",
+            response.status()
+        ));
+    }
+
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse LCD info response: {}", e))?;
+
+    let mut independence_list = Vec::new();
+
+    if let Some(list) = json.get("LcdIndependenceList").and_then(|v| v.as_array()) {
+        for item in list {
+            let lcd_independence = item
+                .get("LcdIndependence")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            let mut lcd_list = Vec::new();
+            if let Some(lcds) = item.get("LcdList").and_then(|v| v.as_array()) {
+                for lcd in lcds {
+                    let lcd_clock_id = lcd.get("LcdClockId").and_then(|v| v.as_u64()).unwrap_or(0);
+                    lcd_list.push(LcdInfo { lcd_clock_id });
+                }
+            }
+
+            independence_list.push(LcdIndependenceInfo {
+                lcd_independence,
+                lcd_list,
+            });
+        }
+    }
+
+    Ok(LcdInfoResponse {
+        device_id,
+        independence_list,
+    })
+}
+
+#[tauri::command]
+async fn activate_pc_monitor(
+    ip_address: String,
+    device_id: u64,
+    lcd_independence: u64,
+    lcd_index: u32,
+) -> Result<(), String> {
+    send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Channel/SetClockSelectId",
+            "LcdIndependence": lcd_independence,
+            "DeviceId": device_id,
+            "LcdIndex": lcd_index,
+            "ClockId": 625 // PC Monitor clock
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to activate PC monitor: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_pc_metrics(
+    ip_address: String,
+    lcd_index: u32,
+    disp_data: Vec<String>,
+) -> Result<(), String> {
+    send_command(
+        &ip_address,
+        &serde_json::json!({
+            "Command": "Device/UpdatePCParaInfo",
+            "ScreenList": [{
+                "LcdId": lcd_index,
+                "DispData": disp_data
+            }]
+        }),
+    )
+    .await
+    .map_err(|e| format!("Failed to send PC metrics: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg(debug_assertions)]
 fn setup_devtools(app: &tauri::App) {
-    let main_window = app.get_webview_window("main").unwrap();
-    main_window.open_devtools();
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window.open_devtools();
+    }
 }
 
 #[cfg(not(debug_assertions))]
@@ -492,9 +626,28 @@ fn setup_devtools(_app: &tauri::App) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenvy::dotenv().ok();
+
+    // Регистрируем обработчик для остановки sidecar при выходе из процесса
+    // Это сработает даже если приложение завершится неожиданно
+    let _ = std::panic::set_hook(Box::new(|_| {
+        system_metrics::stop_sidecar_service();
+    }));
+
     tauri::Builder::default()
         .setup(|app| {
             setup_devtools(app);
+            system_metrics::setup_sidecar_service();
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { .. } = event {
+                        eprintln!("[App] Window closing, stopping sidecar...");
+                        system_metrics::stop_sidecar_service();
+                    }
+                });
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -512,7 +665,15 @@ pub fn run() {
             upload_image_from_file,
             set_screen_text,
             reboot_device,
+            system_metrics::get_system_metrics,
+            get_lcd_info,
+            activate_pc_monitor,
+            send_pc_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // Дополнительная защита - остановка sidecar при выходе из run()
+    // Это сработает, если приложение завершится нормально
+    system_metrics::stop_sidecar_service();
 }

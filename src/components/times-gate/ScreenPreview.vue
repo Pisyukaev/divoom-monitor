@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import type { CSSProperties } from 'vue';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { CircleCloseFilled } from '@element-plus/icons-vue';
@@ -246,13 +246,14 @@ watch(
 
 onMounted(() => {
   measureAllTextWidths();
-});
-
-// Add global event listeners for drag
-if (typeof window !== 'undefined') {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
-}
+});
+
+onUnmounted(() => {
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
+});
 </script>
 
 <template>

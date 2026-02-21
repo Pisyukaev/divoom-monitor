@@ -61,8 +61,8 @@ function handleUpdateSettings() {
 }
 
 
-function handleRebootDevice() {
-    invokeCommand('reboot_device', {
+async function handleRebootDevice() {
+    await invokeCommand('reboot_device', {
         ipAddress: props.deviceIp,
     });
 }

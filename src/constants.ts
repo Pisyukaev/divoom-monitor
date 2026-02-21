@@ -60,4 +60,7 @@ export const commands = [
   'upload_image_from_file',
   'set_screen_text',
   'reboot_device',
+  'get_lcd_info',
+  'activate_pc_monitor',
+  'send_pc_metrics',
 ] as const;

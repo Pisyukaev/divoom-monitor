@@ -28,4 +28,9 @@ reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 image = "0.24"
 base64 = "0.22"
+sysinfo = "0.30"
+dotenvy = "0.15"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+wmi = "0.13"
+nvml-wrapper = "0.9"

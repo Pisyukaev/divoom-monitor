@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { useRoute } from 'vue-router';
 import SettingsLayout from '../components/SettingsLayout.vue';
-
-const route = useRoute();
-
-onMounted(() => {
-  console.log('DeviceSettingsView mounted, route:', route.path, route.name);
-});
 </script>
 
 <template>

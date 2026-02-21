@@ -13,9 +13,8 @@ function getSignalBarActive(
   signalStrength: number | null
 ): boolean {
   if (signalStrength === null) return false;
-  // Signal strength is negative, so -30 is better than -90
-  // Map to 4 bars: -30 to -50 = 4 bars, -50 to -70 = 3 bars, etc.
-  const threshold = -30 - barIndex * 20;
+  // barIndex is 1-based (v-for="i in 4"), convert to 0-based
+  const threshold = -30 - (barIndex - 1) * 20;
   return signalStrength >= threshold;
 }
 </script>

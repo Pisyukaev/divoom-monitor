@@ -9,7 +9,7 @@ const deviceId = computed(() => route.params.id as string);
 
 const deviceIp = computed(() => {
   const decodedId = decodeURIComponent(deviceId.value);
-  if (decodedId.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(decodedId)) {
     return decodedId;
   }
   return '';
