@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:sidecar": "dotnet publish hardware-monitor-cli/HardwareMonitorCli.csproj -c Release -r win-x64 --self-contained -o src-tauri/sidecar",
     "start": "tauri dev",
     "start:linux": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
     "build": "vue-tsc --noEmit && vite build",

@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment
+.env
+
+# C# sidecar build artifacts
+hardware-monitor-cli/bin/
+hardware-monitor-cli/obj/
+src-tauri/sidecar/
