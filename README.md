@@ -8,17 +8,12 @@ This template should help get you started developing with Vue 3 and TypeScript i
 
 ## Hardware temperature sidecar (Windows)
 
-To get CPU/GPU temperatures on Windows, build the optional .NET sidecar and point the app to it:
+To get CPU/GPU temperatures on Windows, build the .NET sidecar:
 
 ```bash
-cd src-tauri/sidecar/HardwareMonitorCli
-dotnet publish -c Release
+pnpm build:sidecar
 ```
 
-Then set the environment variable before running Tauri:
+This publishes `HardwareMonitorCli.exe` into `src-tauri/sidecar/`. The Tauri backend discovers it automatically.
 
-```bash
-pnpm run start
-```
-
-You can also put `LHM_SIDECAR_PATH` into the `.env` file at the repo root. The Tauri backend loads it automatically at startup. Relative paths are resolved from the Tauri executable directory.
+To override the sidecar location, set `LHM_SIDECAR_PATH` in the `.env` file at the repo root.

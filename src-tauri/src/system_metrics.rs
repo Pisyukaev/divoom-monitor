@@ -133,30 +133,61 @@ async fn sidecar_temperatures() -> Option<SidecarTemperatures> {
     Some(temps)
 }
 
-fn resolve_sidecar_path(raw_path: &str) -> Option<PathBuf> {
-    let path = Path::new(raw_path);
-    if path.is_absolute() {
-        return Some(path.to_path_buf());
+const SIDECAR_EXE_NAME: &str = "HardwareMonitorCli.exe";
+
+fn find_sidecar_path() -> Result<PathBuf, String> {
+    if let Ok(env_path) = std::env::var("LHM_SIDECAR_PATH") {
+        let path = Path::new(&env_path);
+
+        if path.is_absolute() && path.exists() {
+            return Ok(path.to_path_buf());
+        }
+
+        let cwd_resolved = std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .ok();
+        if let Some(ref p) = cwd_resolved {
+            if p.exists() {
+                return Ok(p.clone());
+            }
+        }
+
+        if let Some(exe_resolved) = std::env::current_exe()
+            .ok()
+            .and_then(|e| e.parent().map(|d| d.join(path)))
+        {
+            if exe_resolved.exists() {
+                return Ok(exe_resolved);
+            }
+        }
+
+        return Err(format!(
+            "LHM_SIDECAR_PATH='{}' set but file not found (tried CWD: {:?})",
+            env_path, cwd_resolved
+        ));
     }
 
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    Some(exe_dir.join(path))
+    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.to_path_buf())) {
+        let next_to_exe = exe_dir.join(SIDECAR_EXE_NAME);
+        if next_to_exe.exists() {
+            return Ok(next_to_exe);
+        }
+
+        let in_sidecar_dir = exe_dir.join("sidecar").join(SIDECAR_EXE_NAME);
+        if in_sidecar_dir.exists() {
+            return Ok(in_sidecar_dir);
+        }
+    }
+
+    Err(format!(
+        "Sidecar '{}' not found. Set LHM_SIDECAR_PATH or run `pnpm build:sidecar`",
+        SIDECAR_EXE_NAME
+    ))
 }
 
 fn start_sidecar_service() -> Result<(), String> {
     let result = std::panic::catch_unwind(|| {
-        let sidecar_path = std::env::var("LHM_SIDECAR_PATH")
-            .map_err(|_| "LHM_SIDECAR_PATH environment variable not set")?;
-
-        let resolved_path = resolve_sidecar_path(&sidecar_path)
-            .ok_or_else(|| format!("Failed to resolve sidecar path: {}", sidecar_path))?;
-
-        if !resolved_path.exists() {
-            return Err(format!(
-                "Sidecar executable not found at: {:?}",
-                resolved_path
-            ));
-        }
+        let resolved_path = find_sidecar_path()?;
 
         use std::net::{SocketAddr, TcpStream};
         use std::time::Duration as StdDuration;
