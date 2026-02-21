@@ -3,8 +3,11 @@ import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
-import { ArrowLeft, Moon, Sunny } from '@element-plus/icons-vue';
+import { check, type Update } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { ArrowLeft, Moon, Sunny, Refresh } from '@element-plus/icons-vue';
 import { useTheme } from '../composables/useTheme';
 import { saveLocale, type Locale } from '../i18n';
 
@@ -17,7 +20,84 @@ const autoStartLoading = ref(false);
 const closeToTray = ref(true);
 const closeToTrayLoading = ref(false);
 
+const appVersion = ref('');
+const updateChecking = ref(false);
+const updateAvailable = ref<Update | null>(null);
+const updateDownloading = ref(false);
+const updateDownloaded = ref(0);
+const updateTotal = ref(0);
+const updateStatus = ref<'idle' | 'checking' | 'available' | 'no-update' | 'downloading' | 'ready' | 'error'>('idle');
+const updateError = ref('');
+
 const themeLabel = computed(() => isDark.value ? t('appSettings.dark') : t('appSettings.light'));
+
+const downloadPercent = computed(() => {
+  if (updateTotal.value === 0) return 0;
+  return Math.round((updateDownloaded.value / updateTotal.value) * 100);
+});
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+async function checkForUpdates() {
+  updateChecking.value = true;
+  updateStatus.value = 'checking';
+  updateError.value = '';
+  updateAvailable.value = null;
+
+  try {
+    const update = await check();
+    if (update) {
+      updateAvailable.value = update;
+      updateStatus.value = 'available';
+    } else {
+      updateStatus.value = 'no-update';
+    }
+  } catch (err) {
+    console.error('Failed to check for updates:', err);
+    updateStatus.value = 'error';
+    updateError.value = String(err);
+  } finally {
+    updateChecking.value = false;
+  }
+}
+
+async function downloadAndInstall() {
+  if (!updateAvailable.value) return;
+
+  updateDownloading.value = true;
+  updateStatus.value = 'downloading';
+  updateDownloaded.value = 0;
+  updateTotal.value = 0;
+
+  try {
+    await updateAvailable.value.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started':
+          updateTotal.value = event.data.contentLength ?? 0;
+          break;
+        case 'Progress':
+          updateDownloaded.value += event.data.chunkLength;
+          break;
+        case 'Finished':
+          updateStatus.value = 'ready';
+          break;
+      }
+    });
+    await relaunch();
+  } catch (err) {
+    console.error('Failed to download/install update:', err);
+    updateStatus.value = 'error';
+    updateError.value = String(err);
+  } finally {
+    updateDownloading.value = false;
+  }
+}
 
 const languageOptions = [
   { value: 'ru', label: 'Русский' },
@@ -30,6 +110,12 @@ function handleLocaleChange(value: string) {
 }
 
 onMounted(async () => {
+  try {
+    appVersion.value = await getVersion();
+  } catch (err) {
+    console.error('Failed to get app version:', err);
+  }
+
   try {
     autoStartEnabled.value = await isEnabled();
   } catch (err) {
@@ -133,6 +219,68 @@ function goBack() {
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
+
+      <el-card class="settings-card" shadow="hover">
+        <template #header>
+          <span class="card-title">{{ t('appSettings.updates') }}</span>
+        </template>
+
+        <el-descriptions :column="1" border>
+          <el-descriptions-item :label="t('appSettings.currentVersion')">
+            <div class="setting-row">
+              <span class="setting-value-label">v{{ appVersion }}</span>
+              <el-button
+                :icon="Refresh"
+                :loading="updateChecking"
+                @click="checkForUpdates"
+                :disabled="updateDownloading"
+              >
+                {{ updateChecking ? t('appSettings.checking') : t('appSettings.checkForUpdates') }}
+              </el-button>
+            </div>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div v-if="updateStatus === 'no-update'" class="update-status update-status--success">
+          {{ t('appSettings.noUpdates') }}
+        </div>
+
+        <div v-if="updateStatus === 'error'" class="update-status update-status--error">
+          {{ t('appSettings.updateError') }}: {{ updateError }}
+        </div>
+
+        <div v-if="updateAvailable && (updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'ready')" class="update-info">
+          <el-alert
+            :title="t('appSettings.updateAvailable', { version: updateAvailable.version })"
+            type="success"
+            :closable="false"
+            show-icon
+          />
+
+          <div v-if="updateAvailable.body" class="release-notes">
+            <span class="release-notes-label">{{ t('appSettings.releaseNotes') }}:</span>
+            <p class="release-notes-body">{{ updateAvailable.body }}</p>
+          </div>
+
+          <div v-if="updateStatus === 'downloading'" class="download-progress">
+            <span class="download-label">{{ t('appSettings.downloading') }}</span>
+            <el-progress :percentage="downloadPercent" :stroke-width="18" striped striped-flow />
+            <span v-if="updateTotal > 0" class="download-detail">
+              {{ formatBytes(updateDownloaded) }} / {{ formatBytes(updateTotal) }}
+            </span>
+          </div>
+
+          <el-button
+            v-if="updateStatus === 'available'"
+            type="primary"
+            @click="downloadAndInstall"
+            :loading="updateDownloading"
+            class="install-button"
+          >
+            {{ t('appSettings.installAndRestart') }}
+          </el-button>
+        </div>
+      </el-card>
     </div>
   </div>
 </template>
@@ -203,6 +351,70 @@ function goBack() {
   font-size: 13px;
   color: var(--el-text-color-secondary);
   flex: 1;
+}
+
+.update-status {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.update-status--success {
+  background-color: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.update-status--error {
+  background-color: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+}
+
+.update-info {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.release-notes {
+  padding: 12px;
+  background-color: var(--el-fill-color-light);
+  border-radius: 6px;
+}
+
+.release-notes-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.release-notes-body {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  white-space: pre-wrap;
+}
+
+.download-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.download-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.download-detail {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  text-align: right;
+}
+
+.install-button {
+  align-self: flex-start;
 }
 
 @media (max-width: 768px) {
