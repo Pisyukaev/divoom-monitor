@@ -31,6 +31,11 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             setup_devtools(app);
+
+            if let Some(data_dir) = app.path().app_data_dir().ok() {
+                app_settings::init(data_dir);
+            }
+
             system_metrics::setup_sidecar_service();
 
             let show_item = MenuItemBuilder::with_id("show", "Показать").build(app)?;
