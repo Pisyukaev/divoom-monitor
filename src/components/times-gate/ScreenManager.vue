@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onBeforeMount, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import ScreenEditor from './ScreenEditor.vue';
 import { TEXT_IDS } from '../../constants';
 import { sendConfigsToDevice } from '../../composables/useAutoSendConfig';
 import type { ScreenConfig, ScreenConfigs } from '../../types/screen';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   deviceId: string;
@@ -57,10 +60,10 @@ function saveConfigs() {
       `screen_configs_${props.deviceId}`,
       JSON.stringify(screenConfigs.value)
     );
-    ElMessage.success('Конфигурация сохранена');
+    ElMessage.success(t('screenManager.configSaved'));
   } catch (error) {
     console.error('Error saving configs:', error);
-    ElMessage.error('Ошибка сохранения конфигурации');
+    ElMessage.error(t('screenManager.configSaveError'));
   }
 }
 
@@ -72,12 +75,12 @@ function handleConfigUpdate(screenIndex: number, config: ScreenConfig) {
 
 async function handleSendAllToDevice() {
   try {
-    ElMessage.info('Отправка всех конфигураций на устройство...');
+    ElMessage.info(t('screenManager.sendingAll'));
     await sendConfigsToDevice(props.deviceIp, screenConfigs.value);
-    ElMessage.success('Все конфигурации отправлены на устройство');
+    ElMessage.success(t('screenManager.allSent'));
   } catch (error) {
     console.error('Error sending configs to device:', error);
-    ElMessage.error('Ошибка отправки конфигураций на устройство');
+    ElMessage.error(t('screenManager.sendError'));
   }
 }
 
@@ -98,20 +101,20 @@ watch(
     <el-card shadow="hover">
       <template #header>
         <div class="manager-header">
-          <span>Настройка экранов Times Gate</span>
+          <span>{{ t('screenManager.title') }}</span>
           <div class="header-actions">
             <el-button type="primary" @click="saveConfigs">
-              Сохранить
+              {{ t('screenManager.save') }}
             </el-button>
             <el-button type="success" @click="handleSendAllToDevice">
-              Отправить на устройство
+              {{ t('screenManager.sendToDevice') }}
             </el-button>
           </div>
         </div>
       </template>
 
       <el-tabs v-model="activeTab" type="border-card">
-        <el-tab-pane v-for="i in 5" :key="i - 1" :label="`Экран ${i}`" :name="String(i - 1)">
+        <el-tab-pane v-for="i in 5" :key="i - 1" :label="t('screenManager.screenN', { n: i })" :name="String(i - 1)">
           <ScreenEditor :config="screenConfigs[i - 1] || { screenIndex: i - 1, texts: [] }" :device-ip="deviceIp"
             @update:config="(config) => handleConfigUpdate(i - 1, config)" />
         </el-tab-pane>

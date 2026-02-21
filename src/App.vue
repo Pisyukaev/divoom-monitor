@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { RouterView } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
 import { startPcMonitorForAllDevices } from './composables/usePcMonitorSend';
+
+const { t } = useI18n();
 
 onMounted(() => {
   startPcMonitorForAllDevices();
@@ -15,7 +18,7 @@ onMounted(() => {
     <RouterView v-slot="{ Component, route: currentRoute }">
       <component :is="Component" v-if="Component" :key="currentRoute.path" />
       <div v-else class="no-route">
-        <p>Маршрут не найден: {{ currentRoute.path }}</p>
+        <p>{{ t('app.routeNotFound', { path: currentRoute.path }) }}</p>
       </div>
     </RouterView>
   </div>

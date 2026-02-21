@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { ArrowLeft, Setting, Monitor, Fold, Expand, Odometer } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
 
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 const { settings } = useDevice();
 
 const DEFAULT_SIDEBAR_WIDTH = 250
@@ -19,7 +21,6 @@ const isCollapsed = ref(false);
 const isResizing = ref(false);
 
 provide('settings', settings)
-
 
 const activeMenu = computed(() => {
   const path = route.path;
@@ -34,11 +35,9 @@ const activeMenu = computed(() => {
 });
 
 function handleMenuSelect(key: string) {
-  // Используем текущий путь устройства и добавляем нужный подпуть
   const deviceId = route.params.id;
   router.push(`/device/${deviceId}/${key}`);
 }
-
 
 function goBack() {
   router.push('/');
@@ -94,7 +93,6 @@ onMounted(() => {
     }
   }
 
-
   document.addEventListener('mousemove', handleResize);
   document.addEventListener('mouseup', stopResize);
 });
@@ -107,11 +105,10 @@ onUnmounted(() => {
 
 <template>
   <div class="device-settings-container">
-    <!-- Боковая панель -->
     <aside class="sidebar" :class="{ collapsed: isCollapsed, resizing: isResizing }"
       :style="{ width: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="sidebar-header">
-        <h3 v-if="!isCollapsed">{{ 'Настройки' }}</h3>
+        <h3 v-if="!isCollapsed">{{ t('settingsLayout.settings') }}</h3>
         <el-button :icon="isCollapsed ? Expand : Fold" @click="toggleSidebar" circle size="small"
           class="collapse-button" />
       </div>
@@ -123,7 +120,7 @@ onUnmounted(() => {
             <Setting />
           </el-icon>
           <template #title>
-            <span>Общие настройки</span>
+            <span>{{ t('settingsLayout.commonSettings') }}</span>
           </template>
         </el-menu-item>
         <el-menu-item index="display">
@@ -131,7 +128,7 @@ onUnmounted(() => {
             <Monitor />
           </el-icon>
           <template #title>
-            <span>Настройки экранов</span>
+            <span>{{ t('settingsLayout.screenSettings') }}</span>
           </template>
         </el-menu-item>
         <el-menu-item index="system">
@@ -139,21 +136,19 @@ onUnmounted(() => {
             <Odometer />
           </el-icon>
           <template #title>
-            <span>Состояние системы</span>
+            <span>{{ t('settingsLayout.systemStatus') }}</span>
           </template>
         </el-menu-item>
       </el-menu>
 
-      <!-- Разделитель для ресайза -->
       <div v-if="!isCollapsed" class="resize-handle" @mousedown="startResize" :class="{ resizing: isResizing }"></div>
     </aside>
 
-    <!-- Основной контент -->
     <main class="main-content" :class="{ resizing: isResizing }"
       :style="{ left: isCollapsed ? `${COLLAPSED_WIDTH}px` : `${sidebarWidth}px` }">
       <div class="content-header">
         <el-button :icon="ArrowLeft" @click="goBack" circle class="back-button" />
-        <h2>{{ 'Настройки устройства' }}</h2>
+        <h2>{{ t('settingsLayout.deviceSettings') }}</h2>
       </div>
 
       <div class="content-area">

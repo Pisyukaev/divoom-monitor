@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { Refresh, Upload, Connection } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 
@@ -13,6 +14,8 @@ import {
   isPcMonitorRunning,
 } from '../composables/usePcMonitorSend';
 import type { DiskUsage, SystemMetrics, LcdInfoResponse, LcdIndependenceInfo } from '../types/system';
+
+const { t } = useI18n();
 
 const route = useRoute();
 
@@ -66,15 +69,15 @@ const screenOptions = computed(() => {
   if (!independence || independence.lcd_list.length === 0) {
     return Array.from({ length: 5 }, (_, i) => ({
       value: i,
-      label: `Экран ${i + 1}`,
+      label: t('systemMetrics.screenN', { n: i + 1 }),
     }));
   }
 
   return independence.lcd_list.map((lcd, i) => ({
     value: i,
     label: lcd.lcd_clock_id === 625
-      ? `Экран ${i + 1} (PC Monitor)`
-      : `Экран ${i + 1} (Clock: ${lcd.lcd_clock_id})`,
+      ? t('systemMetrics.screenPcMonitor', { n: i + 1 })
+      : t('systemMetrics.screenClock', { n: i + 1, clockId: lcd.lcd_clock_id }),
   }));
 });
 
@@ -107,7 +110,7 @@ const loadMetrics = async () => {
     metrics.value = await getSystemMetrics();
     lastUpdated.value = new Date();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Не удалось получить метрики системы';
+    error.value = err instanceof Error ? err.message : t('systemMetrics.metricsError');
   } finally {
     isLoading.value = false;
   }
@@ -121,7 +124,7 @@ async function loadLcdInfo() {
   try {
     lcdInfo.value = await getLcdInfo(deviceIp.value);
   } catch (err) {
-    lcdError.value = err instanceof Error ? err.message : 'Не удалось получить информацию об экранах';
+    lcdError.value = err instanceof Error ? err.message : t('systemMetrics.lcdError');
   } finally {
     isLoadingLcd.value = false;
   }
@@ -141,10 +144,10 @@ async function handleActivate() {
       lcdIndependence,
       selectedScreen.value,
     );
-    ElMessage.success(`PC Monitor активирован на экране ${selectedScreen.value + 1}`);
+    ElMessage.success(t('systemMetrics.pcMonitorActivated', { n: selectedScreen.value + 1 }));
     await loadLcdInfo();
   } catch (err) {
-    ElMessage.error(`Ошибка активации: ${err}`);
+    ElMessage.error(t('systemMetrics.activationError', { error: String(err) }));
   } finally {
     isActivating.value = false;
   }
@@ -199,15 +202,15 @@ onUnmounted(() => {
   <div class="metrics-page">
     <div class="metrics-header">
       <div>
-        <h2>Состояние системы</h2>
-        <p class="subtitle">Актуальные показатели загрузки и температуры</p>
+        <h2>{{ t('systemMetrics.title') }}</h2>
+        <p class="subtitle">{{ t('systemMetrics.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <span v-if="lastUpdated" class="timestamp">
-          Обновлено: {{ lastUpdated.toLocaleTimeString() }}
+          {{ t('systemMetrics.updated', { time: lastUpdated.toLocaleTimeString() }) }}
         </span>
         <el-button :icon="Refresh" :loading="isLoading" @click="loadMetrics">
-          Обновить
+          {{ t('systemMetrics.refresh') }}
         </el-button>
       </div>
     </div>
@@ -217,58 +220,58 @@ onUnmounted(() => {
     <div v-if="metrics" class="metrics-grid">
       <el-card class="metric-card">
         <template #header>
-          <span>CPU</span>
+          <span>{{ t('systemMetrics.cpu') }}</span>
         </template>
         <div class="metric-value">
           <span class="value">{{ formatPercent(metrics.cpu_usage) }}</span>
-          <span class="label">Загрузка</span>
+          <span class="label">{{ t('systemMetrics.load') }}</span>
         </div>
         <el-progress :percentage="metrics.cpu_usage" :stroke-width="10" :format="formatPercent" />
         <div class="metric-footer">
-          <span>Температура</span>
+          <span>{{ t('systemMetrics.temperature') }}</span>
           <strong>{{ formatTemperature(metrics.cpu_temperature) }}</strong>
         </div>
       </el-card>
 
       <el-card class="metric-card">
         <template #header>
-          <span>GPU</span>
+          <span>{{ t('systemMetrics.gpu') }}</span>
         </template>
         <div class="metric-value">
           <span class="value">{{ formatTemperature(metrics.gpu_temperature) }}</span>
-          <span class="label">Температура</span>
+          <span class="label">{{ t('systemMetrics.temperature') }}</span>
         </div>
-        <p class="hint">Если температура не доступна, устройство не сообщает датчик.</p>
+        <p class="hint">{{ t('systemMetrics.gpuHint') }}</p>
       </el-card>
 
       <el-card class="metric-card">
         <template #header>
-          <span>RAM</span>
+          <span>{{ t('systemMetrics.ram') }}</span>
         </template>
         <div class="metric-value">
           <span class="value">{{ formatPercent(memoryUsagePercent) }}</span>
-          <span class="label">Использование</span>
+          <span class="label">{{ t('systemMetrics.usage') }}</span>
         </div>
         <el-progress :percentage="memoryUsagePercent" :stroke-width="10" status="success" :format="formatPercent" />
         <div class="metric-footer">
           <span>{{ formatBytes(metrics.memory_used) }}</span>
-          <span>из {{ formatBytes(metrics.memory_total) }}</span>
+          <span>{{ t('systemMetrics.of') }} {{ formatBytes(metrics.memory_total) }}</span>
         </div>
       </el-card>
     </div>
 
     <el-card v-if="metrics" class="disk-card">
       <template #header>
-        <span>Диски</span>
+        <span>{{ t('systemMetrics.disks') }}</span>
       </template>
-      <div v-if="disks.length === 0" class="empty-state">Данные о дисках недоступны.</div>
+      <div v-if="disks.length === 0" class="empty-state">{{ t('systemMetrics.disksUnavailable') }}</div>
       <div v-else class="disk-list">
         <div v-for="disk in disks" :key="`${disk.name}-${disk.mount_point}`" class="disk-item">
-          <strong>{{ disk.name || 'Диск' }}</strong>
+          <strong>{{ disk.name || t('systemMetrics.disk') }}</strong>
           <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
           <div class="disk-info">
             <div class="metric-footer">
-              <span>{{ formatBytes(disk.used_space) }} из {{ formatBytes(disk.total_space) }}</span>
+              <span>{{ formatBytes(disk.used_space) }} {{ t('systemMetrics.of') }} {{ formatBytes(disk.total_space) }}</span>
             </div>
           </div>
         </div>
@@ -278,7 +281,7 @@ onUnmounted(() => {
     <el-card v-if="deviceIp" class="device-send-card" v-loading="isLoadingLcd">
       <template #header>
         <div class="send-header">
-          <span>Отправка на устройство</span>
+          <span>{{ t('systemMetrics.sendToDevice') }}</span>
           <el-button :icon="Refresh" size="small" circle @click="loadLcdInfo" :loading="isLoadingLcd" />
         </div>
       </template>
@@ -288,26 +291,26 @@ onUnmounted(() => {
 
       <div class="send-controls">
         <div class="send-row">
-          <label class="send-label">Экран</label>
+          <label class="send-label">{{ t('systemMetrics.screen') }}</label>
           <el-select v-model="selectedScreen" style="width: 260px" :disabled="autoSendEnabled">
             <el-option v-for="opt in screenOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </div>
 
         <div class="send-row">
-          <label class="send-label">Режим PC Monitor</label>
+          <label class="send-label">{{ t('systemMetrics.pcMonitorMode') }}</label>
           <div class="send-actions">
             <el-button type="primary" :icon="Connection" :loading="isActivating" :disabled="isSelectedScreenPcMonitor"
               @click="handleActivate">
-              {{ isSelectedScreenPcMonitor ? 'Уже активирован' : 'Активировать' }}
+              {{ isSelectedScreenPcMonitor ? t('systemMetrics.alreadyActivated') : t('systemMetrics.activate') }}
             </el-button>
             <el-tag v-if="isSelectedScreenPcMonitor" type="success" size="small">Clock 625</el-tag>
           </div>
         </div>
 
         <div class="send-row">
-          <label class="send-label">Автоотправка метрик</label>
-          <el-switch v-model="autoSendEnabled" active-text="Вкл" inactive-text="Выкл" />
+          <label class="send-label">{{ t('systemMetrics.autoSendMetrics') }}</label>
+          <el-switch v-model="autoSendEnabled" :active-text="t('systemMetrics.on')" :inactive-text="t('systemMetrics.off')" />
         </div>
 
         <el-alert v-if="sendError" type="error" :title="sendError" show-icon :closable="true"
@@ -317,11 +320,11 @@ onUnmounted(() => {
           <el-icon color="var(--el-color-success)">
             <Upload />
           </el-icon>
-          <span>Метрики отправляются в фоновом режиме каждые 2 сек.</span>
+          <span>{{ t('systemMetrics.metricsSending') }}</span>
         </div>
 
         <div v-if="metrics && autoSendEnabled" class="send-preview">
-          <p class="send-preview-title">Отправляемые данные:</p>
+          <p class="send-preview-title">{{ t('systemMetrics.sentData') }}</p>
           <div class="send-preview-grid">
             <span>CPU: {{ Math.round(metrics.cpu_usage) }}%</span>
             <span>GPU: 0%</span>

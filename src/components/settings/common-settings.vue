@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n';
 import { Refresh, SwitchButton } from '@element-plus/icons-vue';
 
 import { useDevice } from '../../composables/useDevice';
 import { commands } from '../../constants';
 import { invokeCommand } from '../../api/times-gate';
 import type { DeviceSettings } from '../../types/device';
+
+const { t } = useI18n();
 
 const props = defineProps<{
     deviceId: string;
@@ -72,12 +75,12 @@ async function handleRebootDevice() {
     <el-card v-loading="isLoadingSettings" class="settings-card" shadow="hover">
         <template #header>
             <div class="card-header">
-                <span>Текущие настройки</span>
+                <span>{{ t('commonSettings.currentSettings') }}</span>
                 <div class="card-header-icons">
                     <el-button :icon="Refresh" :loading="isLoadingSettings" @click="handleUpdateSettings" size="small"
-                        circle :title="'Обновить настройки'" />
+                        circle :title="t('commonSettings.refreshSettings')" />
                     <el-button :icon="SwitchButton" :loading="isLoadingSettings" @click="handleRebootDevice"
-                        size="small" circle :title="'Перезагрузить устройство'" />
+                        size="small" circle :title="t('commonSettings.rebootDevice')" />
                 </div>
             </div>
         </template>
@@ -86,13 +89,13 @@ async function handleRebootDevice() {
             style="margin-bottom: 20px" />
 
         <div v-if="settings && !isLoadingSettings">
-            <el-descriptions title="Основные настройки" :column="1" border>
-                <el-descriptions-item v-if="settings.light_switch !== undefined" label="Включить\выключить">
+            <el-descriptions :title="t('commonSettings.basicSettings')" :column="1" border>
+                <el-descriptions-item v-if="settings.light_switch !== undefined" :label="t('commonSettings.powerToggle')">
                     <el-switch
                         @change="(value: string | number | boolean) => handleChangeOption('light_switch', 'set_switch_screen')(Number(Boolean(value)))"
                         v-model="isLightMode" />
                 </el-descriptions-item>
-                <el-descriptions-item v-if="settings.brightness !== undefined" label="Яркость">
+                <el-descriptions-item v-if="settings.brightness !== undefined" :label="t('commonSettings.brightness')">
                     <div class="setting-value">
                         <div class="brightness-control">
                             <el-slider
@@ -105,12 +108,12 @@ async function handleRebootDevice() {
                     </div>
                 </el-descriptions-item>
 
-                <el-descriptions-item v-if="settings.mirror_flag !== undefined" label="Отзеркалить">
+                <el-descriptions-item v-if="settings.mirror_flag !== undefined" :label="t('commonSettings.mirror')">
                     <el-switch
                         @change="(value: string | number | boolean) => handleChangeOption('mirror_flag', 'set_mirror_mode')(Number(Boolean(value)))"
                         v-model="isMirror" />
                 </el-descriptions-item>
-                <el-descriptions-item v-if="settings.temperature_mode !== undefined" label="Формат температуры">
+                <el-descriptions-item v-if="settings.temperature_mode !== undefined" :label="t('commonSettings.temperatureFormat')">
                     <el-button-group>
                         <el-button :type="isCelsius ? 'primary' : ''" @click="
                             () =>
@@ -119,7 +122,7 @@ async function handleRebootDevice() {
                                     'set_temperature_mode'
                                 )(0)
                         ">
-                            Цельсий
+                            {{ t('commonSettings.celsius') }}
                         </el-button>
                         <el-button :type="!isCelsius ? 'primary' : ''" @click="
                             () =>
@@ -128,11 +131,11 @@ async function handleRebootDevice() {
                                     'set_temperature_mode'
                                 )(1)
                         ">
-                            Фаренгейт
+                            {{ t('commonSettings.fahrenheit') }}
                         </el-button>
                     </el-button-group>
                 </el-descriptions-item>
-                <el-descriptions-item v-if="settings.time24_flag !== undefined" label="24-часовой формат">
+                <el-descriptions-item v-if="settings.time24_flag !== undefined" :label="t('commonSettings.timeFormat24')">
                     <el-switch
                         @change="(value: string | number | boolean) => handleChangeOption('time24_flag', 'set_24_hours_mode')(Number(Boolean(value)))"
                         v-model="is24hours" />
@@ -141,7 +144,7 @@ async function handleRebootDevice() {
         </div>
 
         <el-empty v-if="!settings && !isLoadingSettings && !settingsError"
-            description="Настройки не загружены. Нажмите 'Обновить' для загрузки." />
+            :description="t('commonSettings.noSettings')" />
     </el-card>
 </template>
 
