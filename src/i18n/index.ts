@@ -6,10 +6,15 @@ export type Locale = 'ru' | 'en';
 
 const STORAGE_KEY = 'app_locale';
 
+function getSystemLocale(): Locale {
+  const lang = navigator.language || navigator.languages?.[0] || '';
+  return lang.startsWith('ru') ? 'ru' : 'en';
+}
+
 function getSavedLocale(): Locale {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === 'en' || saved === 'ru') return saved;
-  return 'ru';
+  return getSystemLocale();
 }
 
 export function saveLocale(locale: Locale) {
