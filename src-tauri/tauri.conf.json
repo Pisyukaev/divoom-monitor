@@ -24,6 +24,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -31,5 +32,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxNUM1RDI3OUJGQ0E5OEEKUldTS3FmeWJKMTFja2Q0ZkpCa3RTT0Z3V0I5NEJKcVpCNG5oVG5qcHVia21IOFZaT2Y1TGs0UXIK",
+      "endpoints": [
+        "https://github.com/Pisyukaev/divoom-monitor/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
