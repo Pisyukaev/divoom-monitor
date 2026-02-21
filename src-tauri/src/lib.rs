@@ -14,8 +14,12 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+use std::sync::atomic::AtomicBool;
+
 // Static counter for PicID, starting from 1000
 static PIC_ID_COUNTER: AtomicU32 = AtomicU32::new(1000);
+
+static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(true);
 
 fn get_next_pic_id() -> u32 {
     PIC_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -614,6 +618,16 @@ async fn send_pc_metrics(
     Ok(())
 }
 
+#[tauri::command]
+fn set_close_to_tray(enabled: bool) {
+    CLOSE_TO_TRAY.store(enabled, Ordering::Relaxed);
+}
+
+#[tauri::command]
+fn get_close_to_tray() -> bool {
+    CLOSE_TO_TRAY.load(Ordering::Relaxed)
+}
+
 #[cfg(debug_assertions)]
 fn setup_devtools(app: &tauri::App) {
     if let Some(main_window) = app.get_webview_window("main") {
@@ -685,10 +699,16 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                let app_handle = app.handle().clone();
                 let _ = window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = window_clone.hide();
+                        if CLOSE_TO_TRAY.load(Ordering::Relaxed) {
+                            api.prevent_close();
+                            let _ = window_clone.hide();
+                        } else {
+                            system_metrics::stop_sidecar_service();
+                            app_handle.exit(0);
+                        }
                     }
                 });
 
@@ -723,6 +743,8 @@ pub fn run() {
             get_lcd_info,
             activate_pc_monitor,
             send_pc_metrics,
+            set_close_to_tray,
+            get_close_to_tray,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

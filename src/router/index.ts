@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import DeviceList from '../components/device-list/list.vue';
+import AppSettingsView from '../views/AppSettingsView.vue';
 import DeviceSettingsView from '../views/DeviceSettingsView.vue';
 import CommonSettingsView from '../views/CommonSettingsView.vue';
 import DisplaySettingsView from '../views/DisplaySettingsView.vue';
@@ -12,6 +13,11 @@ const router = createRouter({
       path: '/',
       name: 'DeviceList',
       component: DeviceList,
+    },
+    {
+      path: '/settings',
+      name: 'AppSettings',
+      component: AppSettingsView,
     },
     {
       path: '/device/:id',
