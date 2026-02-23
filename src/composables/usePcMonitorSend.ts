@@ -20,7 +20,7 @@ const activeLoops = new Map<string, number>();
 
 export function buildDispData(m: SystemMetrics): string[] {
   const cpuUsage = `${Math.round(m.cpu_usage)}%`;
-  const gpuUsage = '0%';
+  const gpuUsage = m.gpu_usage !== null ? `${Math.round(m.gpu_usage)}%` : '0%';
   const cpuTemp =
     m.cpu_temperature !== null ? `${Math.round(m.cpu_temperature)} C` : 'N/A';
   const gpuTemp =

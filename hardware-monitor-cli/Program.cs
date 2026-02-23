@@ -62,6 +62,7 @@ while (!cts.Token.IsCancellationRequested)
         var metrics = new SystemMetrics();
         float? cpuTemp = null;
         float? gpuTemp = null;
+        float? gpuUsage = null;
         float cpuUsageTotal = 0;
         int cpuCoreCount = 0;
 
@@ -127,6 +128,16 @@ while (!cts.Token.IsCancellationRequested)
                             else if (sensorName.StartsWith("cpu core #"))
                             {
                                 cpuCoreCount++;
+                            }
+                        }
+                        else if (hardware.HardwareType is HardwareType.GpuNvidia
+                                 or HardwareType.GpuAmd
+                                 or HardwareType.GpuIntel)
+                        {
+                            if (sensorName.Contains("core") && !sensorName.Contains("memory")
+                                && !sensorName.Contains("video"))
+                            {
+                                gpuUsage = value;
                             }
                         }
                         break;
@@ -201,6 +212,7 @@ while (!cts.Token.IsCancellationRequested)
 
         metrics.CpuUsage = cpuUsageTotal;
         metrics.CpuTemperature = cpuTemp;
+        metrics.GpuUsage = gpuUsage;
         metrics.GpuTemperature = gpuTemp;
         metrics.MemoryTotal = memoryTotal;
         metrics.MemoryUsed = memoryUsed;
@@ -258,6 +270,9 @@ class SystemMetrics
     
     [JsonPropertyName("cpu_temperature")]
     public float? CpuTemperature { get; set; }
+    
+    [JsonPropertyName("gpu_usage")]
+    public float? GpuUsage { get; set; }
     
     [JsonPropertyName("gpu_temperature")]
     public float? GpuTemperature { get; set; }

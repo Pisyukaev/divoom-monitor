@@ -238,10 +238,15 @@ onUnmounted(() => {
           <span>{{ t('systemMetrics.gpu') }}</span>
         </template>
         <div class="metric-value">
-          <span class="value">{{ formatTemperature(metrics.gpu_temperature) }}</span>
-          <span class="label">{{ t('systemMetrics.temperature') }}</span>
+          <span class="value">{{ metrics.gpu_usage !== null ? formatPercent(metrics.gpu_usage) : '—' }}</span>
+          <span class="label">{{ t('systemMetrics.load') }}</span>
         </div>
-        <p class="hint">{{ t('systemMetrics.gpuHint') }}</p>
+        <el-progress v-if="metrics.gpu_usage !== null" :percentage="metrics.gpu_usage" :stroke-width="10" :format="formatPercent" />
+        <div class="metric-footer">
+          <span>{{ t('systemMetrics.temperature') }}</span>
+          <strong>{{ formatTemperature(metrics.gpu_temperature) }}</strong>
+        </div>
+        <p v-if="metrics.gpu_usage === null && metrics.gpu_temperature === null" class="hint">{{ t('systemMetrics.gpuHint') }}</p>
       </el-card>
 
       <el-card class="metric-card">
@@ -327,7 +332,7 @@ onUnmounted(() => {
           <p class="send-preview-title">{{ t('systemMetrics.sentData') }}</p>
           <div class="send-preview-grid">
             <span>CPU: {{ Math.round(metrics.cpu_usage) }}%</span>
-            <span>GPU: 0%</span>
+            <span>GPU: {{ metrics.gpu_usage !== null ? `${Math.round(metrics.gpu_usage)}%` : 'N/A' }}</span>
             <span>CPU t: {{ metrics.cpu_temperature !== null ? `${Math.round(metrics.cpu_temperature)} C` : 'N/A'
               }}</span>
             <span>GPU t: {{ metrics.gpu_temperature !== null ? `${Math.round(metrics.gpu_temperature)} C` : 'N/A'

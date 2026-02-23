@@ -27,6 +27,8 @@ pub struct DiskUsage {
 pub struct SystemMetrics {
     pub cpu_usage: f32,
     pub cpu_temperature: Option<f32>,
+    #[serde(default)]
+    pub gpu_usage: Option<f32>,
     pub gpu_temperature: Option<f32>,
     pub memory_total: u64,
     pub memory_used: u64,
@@ -312,6 +314,23 @@ fn wmi_cpu_temperature() -> Option<f32> {
 }
 
 #[cfg(target_os = "windows")]
+fn nvml_gpu_usage() -> Option<f32> {
+    let nvml = nvml_wrapper::Nvml::init().ok()?;
+    let device_count = nvml.device_count().ok()?;
+    let mut best_usage = None;
+
+    for index in 0..device_count {
+        let device = nvml.device_by_index(index).ok()?;
+        if let Ok(utilization) = device.utilization_rates() {
+            let gpu_pct = utilization.gpu as f32;
+            best_usage = Some(best_usage.map_or(gpu_pct, |current: f32| current.max(gpu_pct)));
+        }
+    }
+
+    best_usage
+}
+
+#[cfg(target_os = "windows")]
 fn nvml_gpu_temperature() -> Option<f32> {
     use nvml_wrapper::enum_wrappers::device::TemperatureSensor;
     let nvml = nvml_wrapper::Nvml::init().ok()?;
@@ -385,8 +404,13 @@ async fn get_gpu_temperature(components: &Components) -> Option<f32> {
 
 #[tauri::command]
 pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
-    // Пытаемся получить полные данные из sidecar
-    if let Some(metrics) = sidecar_metrics().await {
+    if let Some(mut metrics) = sidecar_metrics().await {
+        if metrics.gpu_usage.is_none() {
+            #[cfg(target_os = "windows")]
+            {
+                metrics.gpu_usage = nvml_gpu_usage();
+            }
+        }
         return Ok(metrics);
     }
 
@@ -405,6 +429,11 @@ pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
     let cpu_usage = system.global_cpu_info().cpu_usage();
     let cpu_temperature = get_cpu_temperature(&components).await;
     let gpu_temperature = get_gpu_temperature(&components).await;
+
+    #[cfg(target_os = "windows")]
+    let gpu_usage = nvml_gpu_usage();
+    #[cfg(not(target_os = "windows"))]
+    let gpu_usage: Option<f32> = None;
 
     let disks = disks
         .iter()
@@ -432,6 +461,7 @@ pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
     Ok(SystemMetrics {
         cpu_usage,
         cpu_temperature,
+        gpu_usage,
         gpu_temperature,
         memory_total: system.total_memory(),
         memory_used: system.used_memory(),

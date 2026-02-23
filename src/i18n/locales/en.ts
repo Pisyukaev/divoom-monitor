@@ -91,7 +91,7 @@ export default {
     ram: 'RAM',
     load: 'Load',
     temperature: 'Temperature',
-    gpuHint: 'If temperature is unavailable, the device does not report a sensor.',
+    gpuHint: 'GPU data is unavailable. Make sure the sidecar is running with admin privileges.',
     usage: 'Usage',
     of: 'of',
     disks: 'Disks',

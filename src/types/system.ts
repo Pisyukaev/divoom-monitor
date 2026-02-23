@@ -10,6 +10,7 @@ export interface DiskUsage {
 export interface SystemMetrics {
   cpu_usage: number;
   cpu_temperature: number | null;
+  gpu_usage: number | null;
   gpu_temperature: number | null;
   memory_total: number;
   memory_used: number;
