@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Search } from '@element-plus/icons-vue';
@@ -12,9 +12,13 @@ import type { DivoomDevice } from '../../types/device';
 const router = useRouter();
 const { t } = useI18n();
 
+const MAX_AUTO_RETRIES = 3;
+const RETRY_DELAY_MS = 3000;
+
 const devices = ref<DivoomDevice[]>([]);
 const isScanning = ref(false);
 const error = ref<string | null>(null);
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function scan() {
   isScanning.value = true;
@@ -30,12 +34,31 @@ async function scan() {
   }
 }
 
+async function scanWithRetry() {
+  for (let attempt = 0; attempt <= MAX_AUTO_RETRIES; attempt++) {
+    await scan();
+    if (devices.value.length > 0) return;
+    if (attempt < MAX_AUTO_RETRIES) {
+      await new Promise<void>((resolve) => {
+        retryTimer = setTimeout(resolve, RETRY_DELAY_MS);
+      });
+    }
+  }
+}
+
 function handleCardClick(device: DivoomDevice) {
   router.push(`/device/${device.ip_address}`);
 }
 
 onMounted(() => {
-  scan();
+  scanWithRetry();
+});
+
+onUnmounted(() => {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
 });
 </script>
 
