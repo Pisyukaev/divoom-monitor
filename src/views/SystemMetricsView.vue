@@ -328,19 +328,6 @@ onUnmounted(() => {
           <span>{{ t('systemMetrics.metricsSending') }}</span>
         </div>
 
-        <div v-if="metrics && autoSendEnabled" class="send-preview">
-          <p class="send-preview-title">{{ t('systemMetrics.sentData') }}</p>
-          <div class="send-preview-grid">
-            <span>CPU: {{ Math.round(metrics.cpu_usage) }}%</span>
-            <span>GPU: {{ metrics.gpu_usage !== null ? `${Math.round(metrics.gpu_usage)}%` : 'N/A' }}</span>
-            <span>CPU t: {{ metrics.cpu_temperature !== null ? `${Math.round(metrics.cpu_temperature)} C` : 'N/A'
-              }}</span>
-            <span>GPU t: {{ metrics.gpu_temperature !== null ? `${Math.round(metrics.gpu_temperature)} C` : 'N/A'
-              }}</span>
-            <span>RAM: {{ Math.round(memoryUsagePercent) }}%</span>
-            <span>HDD: {{ Math.round(maxDiskUsage) }}%</span>
-          </div>
-        </div>
       </div>
     </el-card>
   </div>
@@ -504,27 +491,6 @@ onUnmounted(() => {
   color: var(--el-text-color-secondary);
 }
 
-.send-preview {
-  padding: 12px 14px;
-  background-color: var(--el-fill-color-lighter);
-  border-radius: 6px;
-  border: 1px solid var(--el-border-color-lighter);
-}
-
-.send-preview-title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.send-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px 16px;
-  font-size: 13px;
-  font-family: monospace;
-  color: var(--el-text-color-primary);
-}
 
 @media (max-width: 768px) {
   .send-row {
@@ -535,10 +501,6 @@ onUnmounted(() => {
 
   .send-label {
     min-width: auto;
-  }
-
-  .send-preview-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>
