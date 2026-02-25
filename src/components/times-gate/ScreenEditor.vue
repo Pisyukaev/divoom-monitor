@@ -232,8 +232,9 @@ async function handleSendTextToDevice(text: TextElementType) {
         </div>
       </el-card>
 
-      <TextElement :text="selectedText" :text-ids="config.textIds" @update:text="handleUpdateSelectedText"
-        @submit:text="handleSendTextToDevice" @add:text="handleAddText" />
+      <!-- TODO: try to solve problem with text positions greater than 64 -->
+      <!-- <TextElement :text="selectedText" :text-ids="config.textIds" @update:text="handleUpdateSelectedText"
+        @submit:text="handleSendTextToDevice" @add:text="handleAddText" /> -->
     </div>
 
     <div class="editor-preview">
