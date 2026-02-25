@@ -52,11 +52,6 @@ const memoryUsagePercent = computed(() => {
 
 const disks = computed<DiskUsage[]>(() => metrics.value?.disks ?? []);
 
-const maxDiskUsage = computed(() => {
-  if (disks.value.length === 0) return 0;
-  return Math.max(...disks.value.map((d) => d.usage_percent));
-});
-
 const currentIndependence = computed<LcdIndependenceInfo | null>(() => {
   if (!lcdInfo.value || lcdInfo.value.independence_list.length === 0) {
     return null;
@@ -241,12 +236,15 @@ onUnmounted(() => {
           <span class="value">{{ metrics.gpu_usage !== null ? formatPercent(metrics.gpu_usage) : '—' }}</span>
           <span class="label">{{ t('systemMetrics.load') }}</span>
         </div>
-        <el-progress v-if="metrics.gpu_usage !== null" :percentage="metrics.gpu_usage" :stroke-width="10" :format="formatPercent" />
+        <el-progress v-if="metrics.gpu_usage !== null" :percentage="metrics.gpu_usage" :stroke-width="10"
+          :format="formatPercent" />
         <div class="metric-footer">
           <span>{{ t('systemMetrics.temperature') }}</span>
           <strong>{{ formatTemperature(metrics.gpu_temperature) }}</strong>
         </div>
-        <p v-if="metrics.gpu_usage === null && metrics.gpu_temperature === null" class="hint">{{ t('systemMetrics.gpuHint') }}</p>
+        <p v-if="metrics.gpu_usage === null && metrics.gpu_temperature === null" class="hint">{{
+          t('systemMetrics.gpuHint') }}
+        </p>
       </el-card>
 
       <el-card class="metric-card">
@@ -276,7 +274,8 @@ onUnmounted(() => {
           <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
           <div class="disk-info">
             <div class="metric-footer">
-              <span>{{ formatBytes(disk.used_space) }} {{ t('systemMetrics.of') }} {{ formatBytes(disk.total_space) }}</span>
+              <span>{{ formatBytes(disk.used_space) }} {{ t('systemMetrics.of') }} {{ formatBytes(disk.total_space)
+              }}</span>
             </div>
           </div>
         </div>
@@ -315,11 +314,12 @@ onUnmounted(() => {
 
         <div class="send-row">
           <label class="send-label">{{ t('systemMetrics.autoSendMetrics') }}</label>
-          <el-switch v-model="autoSendEnabled" :active-text="t('systemMetrics.on')" :inactive-text="t('systemMetrics.off')" />
+          <el-switch v-model="autoSendEnabled" :active-text="t('systemMetrics.on')"
+            :inactive-text="t('systemMetrics.off')" />
         </div>
 
-        <el-alert v-if="sendError" type="error" :title="sendError" show-icon :closable="true"
-          @close="sendError = null" style="margin-top: 8px" />
+        <el-alert v-if="sendError" type="error" :title="sendError" show-icon :closable="true" @close="sendError = null"
+          style="margin-top: 8px" />
 
         <div v-if="autoSendEnabled" class="send-status">
           <el-icon color="var(--el-color-success)">
