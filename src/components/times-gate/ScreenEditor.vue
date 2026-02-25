@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import ScreenPreview from './ScreenPreview.vue';
-import TextElement from './TextElement.vue';
+// import TextElement from './TextElement.vue';
 import type { ScreenConfig, TextElement as TextElementType } from '../../types/screen';
 
 const { t } = useI18n();
@@ -112,15 +112,15 @@ function handleRemoveImage() {
   emit('update:config', localConfig.value);
 }
 
-function handleAddText(text: TextElementType) {
-  localConfig.value = {
-    ...localConfig.value,
-    texts: [...localConfig.value.texts, { ...text, color: text.color?.toUpperCase() }],
-  };
-  handleSendTextToDevice(text);
-  ElMessage.success(t('screenEditor.textAdded'));
-  emit('update:config', localConfig.value);
-}
+// function handleAddText(text: TextElementType) {
+//   localConfig.value = {
+//     ...localConfig.value,
+//     texts: [...localConfig.value.texts, { ...text, color: text.color?.toUpperCase() }],
+//   };
+//   handleSendTextToDevice(text);
+//   ElMessage.success(t('screenEditor.textAdded'));
+//   emit('update:config', localConfig.value);
+// }
 
 function handleRemoveText(textId: number) {
   if (selectedText.value?.id === textId) {
@@ -147,23 +147,23 @@ function handleTextClick(textId: number | null) {
   selectedText.value = text || null;
 }
 
-function handleUpdateSelectedText(text: TextElementType) {
-  if (selectedText.value === null) {
-    return;
-  }
+// function handleUpdateSelectedText(text: TextElementType) {
+//   if (selectedText.value === null) {
+//     return;
+//   }
 
-  localConfig.value = {
-    ...localConfig.value,
-    texts: localConfig.value.texts.map((t) =>
-      t.id === text.id
-        ? {
-          ...t,
-          ...text
-        }
-        : t
-    ),
-  }
-}
+//   localConfig.value = {
+//     ...localConfig.value,
+//     texts: localConfig.value.texts.map((t) =>
+//       t.id === text.id
+//         ? {
+//           ...t,
+//           ...text
+//         }
+//         : t
+//     ),
+//   }
+// }
 
 function handleUpdateTextPosition(textId: number, x: number, y: number) {
   localConfig.value = {
@@ -178,30 +178,30 @@ function handleUpdateTextPosition(textId: number, x: number, y: number) {
   }
 }
 
-async function handleSendTextToDevice(text: TextElementType) {
-  try {
-    await invoke('set_screen_text', {
-      ipAddress: props.deviceIp,
-      screenIndex: props.config.screenIndex,
-      textConfig: {
-        id: text.id,
-        content: text.content,
-        x: text.x,
-        y: text.y,
-        font: text.font,
-        color: text.color?.toUpperCase(),
-        alignment: text.alignment,
-        text_width: text.textWidth,
-      },
-    });
-    ElMessage.success(t('screenEditor.textSent'));
-  } catch (error) {
-    console.error('Error sending text:', error);
-    ElMessage.error(t('screenEditor.textSendError', { error: String(error) }));
-  } finally {
-    emit('update:config', localConfig.value);
-  }
-}
+// async function handleSendTextToDevice(text: TextElementType) {
+//   try {
+//     await invoke('set_screen_text', {
+//       ipAddress: props.deviceIp,
+//       screenIndex: props.config.screenIndex,
+//       textConfig: {
+//         id: text.id,
+//         content: text.content,
+//         x: text.x,
+//         y: text.y,
+//         font: text.font,
+//         color: text.color?.toUpperCase(),
+//         alignment: text.alignment,
+//         text_width: text.textWidth,
+//       },
+//     });
+//     ElMessage.success(t('screenEditor.textSent'));
+//   } catch (error) {
+//     console.error('Error sending text:', error);
+//     ElMessage.error(t('screenEditor.textSendError', { error: String(error) }));
+//   } finally {
+//     emit('update:config', localConfig.value);
+//   }
+// }
 </script>
 
 <template>
