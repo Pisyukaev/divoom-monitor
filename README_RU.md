@@ -1,10 +1,22 @@
-# Divoom Monitor
+<p align="center">
+  <img src="app-icon.png" alt="Divoom Monitor" width="128" height="128" />
+</p>
 
-Desktop-приложение для управления устройствами [Divoom](https://www.divoom.com/) (Pixoo, Times Gate и др.) по локальной сети. Построено на **Tauri 2 + Vue 3 + Rust**.
+<h1 align="center">Divoom Monitor</h1>
 
-Позволяет находить устройства в сети, настраивать их параметры, загружать изображения на экран и транслировать показатели системы (CPU, GPU, RAM) прямо на дисплей в режиме реального времени.
+<p align="center">
+  Desktop-приложение для управления устройствами <a href="https://www.divoom.com/">Divoom</a> (Pixoo, Times Gate и др.) по локальной сети.<br/>
+  Построено на <strong>Tauri 2 + Vue 3 + Rust</strong>.
+</p>
 
-> **[English version (README.md)](README.md)**
+<p align="center">
+  <a href="https://github.com/Pisyukaev/divoom-monitor/releases"><img src="https://img.shields.io/github/v/release/Pisyukaev/divoom-monitor?style=flat-square" alt="Релиз" /></a>
+  <a href="https://github.com/Pisyukaev/divoom-monitor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Pisyukaev/divoom-monitor?style=flat-square" alt="Лицензия" /></a>
+</p>
+
+<p align="center">
+  <strong><a href="README.md">English version</a></strong>
+</p>
 
 ---
 
