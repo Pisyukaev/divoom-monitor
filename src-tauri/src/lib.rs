@@ -1,6 +1,8 @@
 mod app_settings;
 mod device_commands;
 mod divoom_api;
+mod dota2_commands;
+mod dota2_gsi;
 mod draw_commands;
 mod models;
 mod system_metrics;
@@ -37,6 +39,13 @@ pub fn run() {
             }
 
             system_metrics::setup_sidecar_service();
+
+            let cache_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_default()
+                .join("dota2_hero_cache");
+            app.manage(dota2_gsi::create_shared_state(cache_dir));
 
             let show_item = MenuItemBuilder::with_id("show", "Показать").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Выход").build(app)?;
@@ -130,6 +139,11 @@ pub fn run() {
             system_metrics::get_system_metrics,
             app_settings::set_close_to_tray,
             app_settings::get_close_to_tray,
+            dota2_commands::start_dota2_server,
+            dota2_commands::stop_dota2_server,
+            dota2_commands::get_dota2_status,
+            dota2_commands::detect_dota2_path,
+            dota2_commands::setup_dota2_gsi_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
