@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, onUnmounted, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ArrowLeft, Setting, Monitor, Fold, Expand, Odometer } from '@element-plus/icons-vue';
+import { ArrowLeft, Setting, Monitor, Fold, Expand, Odometer, Trophy } from '@element-plus/icons-vue';
 
 import { useDevice } from '../composables/useDevice';
 
@@ -30,6 +30,8 @@ const activeMenu = computed(() => {
     return 'display';
   } else if (path.includes('/system')) {
     return 'system';
+  } else if (path.includes('/dota2')) {
+    return 'dota2';
   }
   return 'common';
 });
@@ -137,6 +139,14 @@ onUnmounted(() => {
           </el-icon>
           <template #title>
             <span>{{ t('settingsLayout.systemStatus') }}</span>
+          </template>
+        </el-menu-item>
+        <el-menu-item index="dota2">
+          <el-icon>
+            <Trophy />
+          </el-icon>
+          <template #title>
+            <span>{{ t('settingsLayout.dota2') }}</span>
           </template>
         </el-menu-item>
       </el-menu>

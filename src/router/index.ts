@@ -5,6 +5,7 @@ import DeviceSettingsView from '../views/DeviceSettingsView.vue';
 import CommonSettingsView from '../views/CommonSettingsView.vue';
 import DisplaySettingsView from '../views/DisplaySettingsView.vue';
 import SystemMetricsView from '../views/SystemMetricsView.vue';
+import Dota2View from '../views/Dota2View.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -46,6 +47,12 @@ const router = createRouter({
           path: 'system',
           name: 'SystemMetrics',
           component: SystemMetricsView,
+          props: true,
+        },
+        {
+          path: 'dota2',
+          name: 'Dota2Integration',
+          component: Dota2View,
           props: true,
         },
       ],
