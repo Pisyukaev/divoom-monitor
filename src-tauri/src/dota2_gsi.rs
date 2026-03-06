@@ -74,6 +74,9 @@ pub struct Dota2GameState {
     pub player_stats: Option<PlayerStats>,
     pub items: Vec<ItemSlot>,
     pub abilities: Vec<AbilitySlot>,
+    pub radiant_score: Option<u32>,
+    pub dire_score: Option<u32>,
+    pub buyback_cost: Option<u32>,
 }
 
 impl Default for Dota2GameState {
@@ -87,6 +90,9 @@ impl Default for Dota2GameState {
             player_stats: None,
             items: Vec::new(),
             abilities: Vec::new(),
+            radiant_score: None,
+            dire_score: None,
+            buyback_cost: None,
         }
     }
 }
@@ -236,22 +242,14 @@ async fn handle_gsi_post(
 ) -> StatusCode {
     let parsed = parse_gsi_payload(&payload);
 
-    let (device_ip, local_ip, port, needs_screen_init, items_changed) = {
+    let (device_ip, local_ip, port, needs_screen_init) = {
         let mut inner = state.write().await;
         inner.last_gsi_time = Some(Instant::now());
 
         if let Some(ref parsed) = parsed {
             if !parsed.heroes.is_empty() {
-                let new_names: Vec<String> =
-                    parsed.heroes.iter().map(|h| h.name.clone()).collect();
+                let new_names: Vec<String> = parsed.heroes.iter().map(|h| h.name.clone()).collect();
                 let heroes_changed = new_names != inner.previous_hero_names;
-
-                let new_item_names: Vec<String> =
-                    parsed.items.iter().map(|i| i.name.clone()).collect();
-                let items_did_change = new_item_names != inner.previous_item_names;
-                if items_did_change {
-                    inner.previous_item_names = new_item_names;
-                }
 
                 inner.game_state = parsed.clone();
                 inner.game_state.game_active = true;
@@ -267,7 +265,6 @@ async fn handle_gsi_post(
                     inner.local_ip.clone(),
                     inner.port,
                     needs_init,
-                    items_did_change && !needs_init,
                 )
             } else {
                 return StatusCode::OK;
@@ -294,22 +291,19 @@ async fn handle_gsi_post(
             let mut inner = state.write().await;
             inner.screens_initialized = true;
         }
-    } else if items_changed {
-        if let Some(ref device_ip) = device_ip {
-            let is_solo = {
-                let inner = state.read().await;
-                inner.game_state.heroes.len() == 1
-            };
-            if is_solo {
-                update_items_screen(&state, device_ip, &local_ip, port).await;
-            }
-        }
     }
 
     StatusCode::OK
 }
 
-fn build_text_item(text_id: u32, x: u32, y: u32, url: &str, color: &str, update_time: u32) -> serde_json::Value {
+fn build_text_item(
+    text_id: u32,
+    x: u32,
+    y: u32,
+    url: &str,
+    color: &str,
+    update_time: u32,
+) -> serde_json::Value {
     serde_json::json!({
         "TextId": text_id,
         "type": 23,
@@ -365,13 +359,19 @@ async fn init_solo_screens(
 ) {
     let short_name = hero_short_name(&hero.name);
     let _ = ensure_hero_image_cached(state, &short_name).await;
-    ensure_dark_bg_cached(state).await;
+    generate_gold_bg(state).await;
+    generate_kda_bg(state).await;
+    ensure_faction_bg_cached(state, "radiant").await;
+    ensure_faction_bg_cached(state, "dire").await;
 
     let hero_url = format!("http://{}:{}/hero/{}.gif", local_ip, port, short_name);
-    let dark_url = format!("http://{}:{}/hero/_dark.gif", local_ip, port);
+    let gold_url = format!("http://{}:{}/hero/_gold_bg.gif", local_ip, port);
+    let kda_url = format!("http://{}:{}/hero/_kda_bg.gif", local_ip, port);
+    let radiant_url = format!("http://{}:{}/hero/_faction_radiant.gif", local_ip, port);
+    let dire_url = format!("http://{}:{}/hero/_faction_dire.gif", local_ip, port);
     let tb = format!("http://{}:{}/text/0", local_ip, port);
 
-    // Screen 0: Hero portrait + nick + level + HP + mana
+    // Screen 0: Hero portrait + level + HP + mana
     let cmd0 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
         "LcdIndex": 0, "NewFlag": 1,
@@ -385,70 +385,59 @@ async fn init_solo_screens(
     });
     let _ = send_command(device_ip, &cmd0).await;
 
-    // Screen 1: Items (composite image)
-    generate_and_cache_items_composite(state).await;
-    let items_url = format!("http://{}:{}/items_composite.gif", local_ip, port);
+    // Screen 1: Gold + Buyback cost
     let cmd1 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
         "LcdIndex": 1, "NewFlag": 1,
-        "BackgroudGif": items_url,
-        "ItemList": []
+        "BackgroudGif": gold_url,
+        "ItemList": [
+            build_text_item(11, 4, 20, &format!("{}/gold_label", tb),  "#BBBBBB", 60),
+            build_text_item(12, 4, 38, &format!("{}/gold_amount", tb), "#FFD700", 1),
+            build_text_item(13, 4, 70, &format!("{}/buyback_label", tb), "#BBBBBB", 60),
+            build_text_item(14, 4, 88, &format!("{}/buyback", tb),     "#FF6B6B", 1),
+        ]
     });
     let _ = send_command(device_ip, &cmd1).await;
 
-    // Screen 2: KDA + Gold + GPM/XPM
+    // Screen 2: KDA
     let cmd2 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
         "LcdIndex": 2, "NewFlag": 1,
-        "BackgroudGif": dark_url,
+        "BackgroudGif": kda_url,
         "ItemList": [
-            build_text_item(21, 0, 0,  &format!("{}/stats_header", tb), "#FFD700", 60),
-            build_text_item(22, 0, 22, &format!("{}/kda", tb),          "#FFFFFF", 1),
-            build_text_item(23, 0, 44, &format!("{}/gold", tb),         "#FFD700", 1),
-            build_text_item(24, 0, 66, &format!("{}/gpm_xpm", tb),      "#BBBBBB", 2),
-            build_text_item(25, 0, 88, &format!("{}/lh_dn", tb),        "#BBBBBB", 2),
+            build_text_item(21, 4, 10, &format!("{}/kills_line", tb),   "#4CAF50", 1),
+            build_text_item(22, 4, 50, &format!("{}/deaths_line", tb),  "#F44336", 1),
+            build_text_item(23, 4, 90, &format!("{}/assists_line", tb), "#2196F3", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd2).await;
 
-    // Screen 3: Abilities
+    // Screen 3: Radiant kills
     let cmd3 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
         "LcdIndex": 3, "NewFlag": 1,
-        "BackgroudGif": dark_url,
+        "BackgroudGif": radiant_url,
         "ItemList": [
-            build_text_item(31, 0, 0,  &format!("{}/abilities_header", tb), "#FFD700", 60),
-            build_text_item(32, 0, 18, &format!("{}/ability_0", tb),        "#FFFFFF", 2),
-            build_text_item(33, 0, 34, &format!("{}/ability_1", tb),        "#FFFFFF", 2),
-            build_text_item(34, 0, 50, &format!("{}/ability_2", tb),        "#FFFFFF", 2),
-            build_text_item(35, 0, 66, &format!("{}/ability_3", tb),        "#FFFFFF", 2),
-            build_text_item(36, 0, 82, &format!("{}/ability_4", tb),        "#FFFFFF", 2),
-            build_text_item(37, 0, 98, &format!("{}/ability_5", tb),        "#FFFFFF", 2),
+            build_text_item(31, 0, 10,  &format!("{}/radiant_label", tb), "#66BB6A", 60),
+            build_text_item(32, 0, 50,  &format!("{}/radiant_score", tb), "#4CAF50", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd3).await;
 
-    // Screen 4: Game info
+    // Screen 4: Dire kills
     let cmd4 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
         "LcdIndex": 4, "NewFlag": 1,
-        "BackgroudGif": dark_url,
+        "BackgroudGif": dire_url,
         "ItemList": [
-            build_text_item(41, 0, 0,  &format!("{}/game_header", tb),  "#FFD700", 60),
-            build_text_item(42, 0, 28, &format!("{}/gametime", tb),     "#FFFFFF", 1),
-            build_text_item(43, 0, 56, &format!("{}/daytime", tb),      "#FFFFFF", 5),
-            build_text_item(44, 0, 84, &format!("{}/hero_name", tb),    "#BBBBBB", 60),
+            build_text_item(41, 0, 10,  &format!("{}/dire_label", tb), "#EF5350", 60),
+            build_text_item(42, 0, 50,  &format!("{}/dire_score", tb), "#F44336", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd4).await;
 }
 
-async fn update_items_screen(
-    state: &SharedDota2State,
-    device_ip: &str,
-    local_ip: &str,
-    port: u16,
-) {
+async fn update_items_screen(state: &SharedDota2State, device_ip: &str, local_ip: &str, port: u16) {
     generate_and_cache_items_composite(state).await;
     let items_url = format!("http://{}:{}/items_composite.gif", local_ip, port);
     let cmd = serde_json::json!({
@@ -480,6 +469,370 @@ async fn ensure_dark_bg_cached(state: &SharedDota2State) {
     inner.hero_image_cache.insert("_dark".to_string(), gif_buf);
 }
 
+fn draw_filled_circle(
+    canvas: &mut image::RgbaImage,
+    cx: i32,
+    cy: i32,
+    r: i32,
+    color: image::Rgba<u8>,
+) {
+    for y in (cy - r)..=(cy + r) {
+        for x in (cx - r)..=(cx + r) {
+            let dx = x - cx;
+            let dy = y - cy;
+            if dx * dx + dy * dy <= r * r {
+                if x >= 0 && x < 128 && y >= 0 && y < 128 {
+                    canvas.put_pixel(x as u32, y as u32, color);
+                }
+            }
+        }
+    }
+}
+
+fn draw_filled_ellipse(
+    canvas: &mut image::RgbaImage,
+    cx: i32,
+    cy: i32,
+    rx: i32,
+    ry: i32,
+    color: image::Rgba<u8>,
+) {
+    for y in (cy - ry)..=(cy + ry) {
+        for x in (cx - rx)..=(cx + rx) {
+            let dx = (x - cx) as f64 / rx as f64;
+            let dy = (y - cy) as f64 / ry as f64;
+            if dx * dx + dy * dy <= 1.0 {
+                if x >= 0 && x < 128 && y >= 0 && y < 128 {
+                    canvas.put_pixel(x as u32, y as u32, color);
+                }
+            }
+        }
+    }
+}
+
+fn draw_filled_rect(
+    canvas: &mut image::RgbaImage,
+    x1: i32,
+    y1: i32,
+    x2: i32,
+    y2: i32,
+    color: image::Rgba<u8>,
+) {
+    for y in y1..=y2 {
+        for x in x1..=x2 {
+            if x >= 0 && x < 128 && y >= 0 && y < 128 {
+                canvas.put_pixel(x as u32, y as u32, color);
+            }
+        }
+    }
+}
+
+fn rgba_to_gif(canvas: image::RgbaImage) -> Vec<u8> {
+    let mut gif_buf = Vec::new();
+    {
+        let mut encoder = GifEncoder::new(&mut gif_buf);
+        let frame = Frame::new(canvas);
+        let _ = encoder.encode_frames(std::iter::once(frame));
+    }
+    gif_buf
+}
+
+async fn generate_gold_bg(state: &SharedDota2State) {
+    {
+        let inner = state.read().await;
+        if inner.hero_image_cache.contains_key("_gold_bg") {
+            return;
+        }
+    }
+
+    let mut canvas = image::RgbaImage::from_pixel(128, 128, image::Rgba([15, 15, 20, 255]));
+
+    let gold_dark = image::Rgba([180, 150, 0, 255]);
+    let gold_main = image::Rgba([255, 215, 0, 255]);
+    let gold_highlight = image::Rgba([255, 245, 130, 255]);
+    let gold_shadow = image::Rgba([140, 110, 0, 255]);
+
+    // Coin 1 at (100, 38) for gold line
+    draw_filled_circle(&mut canvas, 100, 38, 14, gold_shadow);
+    draw_filled_circle(&mut canvas, 100, 38, 12, gold_dark);
+    draw_filled_circle(&mut canvas, 100, 38, 10, gold_main);
+    draw_filled_circle(&mut canvas, 99, 36, 6, gold_highlight);
+
+    // Coin 2 at (100, 88) for buyback line
+    draw_filled_circle(&mut canvas, 100, 88, 14, gold_shadow);
+    draw_filled_circle(&mut canvas, 100, 88, 12, gold_dark);
+    draw_filled_circle(&mut canvas, 100, 88, 10, gold_main);
+    draw_filled_circle(&mut canvas, 99, 86, 6, gold_highlight);
+
+    // Subtle horizontal separator
+    for x in 10..118 {
+        canvas.put_pixel(x, 62, image::Rgba([40, 40, 50, 255]));
+    }
+
+    let gif_buf = rgba_to_gif(canvas);
+
+    let mut inner = state.write().await;
+    inner
+        .hero_image_cache
+        .insert("_gold_bg".to_string(), gif_buf);
+}
+
+async fn generate_kda_bg(state: &SharedDota2State) {
+    {
+        let inner = state.read().await;
+        if inner.hero_image_cache.contains_key("_kda_bg") {
+            return;
+        }
+    }
+
+    let mut canvas = image::RgbaImage::from_pixel(128, 128, image::Rgba([15, 15, 20, 255]));
+
+    let bone = image::Rgba([45, 42, 40, 255]);
+    let bone_dark = image::Rgba([35, 32, 30, 255]);
+    let eye_color = image::Rgba([20, 18, 18, 255]);
+
+    // Cranium (large ellipse, centered at 64, 48)
+    draw_filled_ellipse(&mut canvas, 64, 45, 32, 28, bone);
+    // Slightly lighter inner cranium for volume
+    draw_filled_ellipse(&mut canvas, 64, 43, 28, 24, image::Rgba([50, 47, 45, 255]));
+
+    // Eye sockets
+    draw_filled_ellipse(&mut canvas, 50, 44, 9, 8, eye_color);
+    draw_filled_ellipse(&mut canvas, 78, 44, 9, 8, eye_color);
+
+    // Nose cavity (inverted triangle)
+    for row in 0..8 {
+        let half_w = row + 1;
+        let y = 56 + row;
+        for x in (64 - half_w as i32)..=(64 + half_w as i32) {
+            if x >= 0 && x < 128 && y < 128 {
+                canvas.put_pixel(x as u32, y as u32, eye_color);
+            }
+        }
+    }
+
+    // Jaw area
+    draw_filled_ellipse(&mut canvas, 64, 72, 24, 10, bone_dark);
+
+    // Teeth (row of small rectangles)
+    let teeth_y = 68;
+    let tooth_w = 5i32;
+    let tooth_h = 8i32;
+    let gap = 2i32;
+    let total_teeth = 6;
+    let teeth_total_w = total_teeth * tooth_w + (total_teeth - 1) * gap;
+    let start_x = 64 - teeth_total_w / 2;
+    for t in 0..total_teeth {
+        let tx = start_x + t * (tooth_w + gap);
+        draw_filled_rect(
+            &mut canvas,
+            tx,
+            teeth_y,
+            tx + tooth_w - 1,
+            teeth_y + tooth_h - 1,
+            bone,
+        );
+    }
+
+    // Crossbones behind skull (subtle)
+    let cb_color = image::Rgba([35, 33, 30, 255]);
+    for i in -40..=40i32 {
+        let x1 = 64 + i;
+        let y1 = 64 + i / 2;
+        let y2 = 64 - i / 2;
+        for dy in -2..=2i32 {
+            if x1 >= 0 && x1 < 128 {
+                if y1 + dy >= 0 && y1 + dy < 128 {
+                    canvas.put_pixel(x1 as u32, (y1 + dy) as u32, cb_color);
+                }
+                if y2 + dy >= 0 && y2 + dy < 128 {
+                    canvas.put_pixel(x1 as u32, (y2 + dy) as u32, cb_color);
+                }
+            }
+        }
+    }
+
+    // Re-draw skull on top of crossbones so it stays clean
+    draw_filled_ellipse(&mut canvas, 64, 45, 32, 28, bone);
+    draw_filled_ellipse(&mut canvas, 64, 43, 28, 24, image::Rgba([50, 47, 45, 255]));
+    draw_filled_ellipse(&mut canvas, 50, 44, 9, 8, eye_color);
+    draw_filled_ellipse(&mut canvas, 78, 44, 9, 8, eye_color);
+    for row in 0..8 {
+        let half_w = row + 1;
+        let y = 56 + row;
+        for x in (64 - half_w as i32)..=(64 + half_w as i32) {
+            if x >= 0 && x < 128 && y < 128 {
+                canvas.put_pixel(x as u32, y as u32, eye_color);
+            }
+        }
+    }
+    draw_filled_ellipse(&mut canvas, 64, 72, 24, 10, bone_dark);
+    for t in 0..total_teeth {
+        let tx = start_x + t * (tooth_w + gap);
+        draw_filled_rect(
+            &mut canvas,
+            tx,
+            teeth_y,
+            tx + tooth_w - 1,
+            teeth_y + tooth_h - 1,
+            bone,
+        );
+    }
+
+    let gif_buf = rgba_to_gif(canvas);
+
+    let mut inner = state.write().await;
+    inner
+        .hero_image_cache
+        .insert("_kda_bg".to_string(), gif_buf);
+}
+
+async fn ensure_faction_bg_cached(state: &SharedDota2State, faction: &str) {
+    let cache_key = format!("_faction_{}", faction);
+    {
+        let inner = state.read().await;
+        if inner.hero_image_cache.contains_key(&cache_key) {
+            return;
+        }
+    }
+
+    let bg_color = match faction {
+        "radiant" => image::Rgba([10, 30, 15, 255]),
+        "dire" => image::Rgba([30, 10, 10, 255]),
+        _ => image::Rgba([15, 15, 20, 255]),
+    };
+
+    let mut canvas = image::RgbaImage::from_pixel(128, 128, bg_color);
+
+    let icon_url = format!(
+        "https://dota2.fandom.com/api.php?action=query&titles=File:{}_icon.png&prop=imageinfo&iiprop=url&format=json",
+        capitalize_first(faction)
+    );
+
+    let icon_loaded = 'download: {
+        let client = match reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+        {
+            Ok(c) => c,
+            Err(_) => break 'download false,
+        };
+
+        let api_resp = match client.get(&icon_url).send().await {
+            Ok(r) if r.status().is_success() => match r.text().await {
+                Ok(t) => t,
+                Err(_) => break 'download false,
+            },
+            _ => break 'download false,
+        };
+
+        let direct_url = extract_wiki_image_url(&api_resp);
+        let direct_url = match direct_url {
+            Some(u) => u,
+            None => break 'download false,
+        };
+
+        let img_resp = match client.get(&direct_url).send().await {
+            Ok(r) if r.status().is_success() => match r.bytes().await {
+                Ok(b) => b,
+                Err(_) => break 'download false,
+            },
+            _ => break 'download false,
+        };
+
+        if let Ok(img) = image::load_from_memory(&img_resp) {
+            let resized = img.resize(96, 96, image::imageops::FilterType::Lanczos3);
+            let rgba = resized.to_rgba8();
+
+            let ox = (128 - rgba.width()) / 2;
+            let oy = (128 - rgba.height()) / 2;
+
+            for py in 0..rgba.height() {
+                for px in 0..rgba.width() {
+                    let p = rgba.get_pixel(px, py);
+                    if p[3] > 20 {
+                        let dst_x = ox + px;
+                        let dst_y = oy + py;
+                        if dst_x < 128 && dst_y < 128 {
+                            let alpha = (p[3] as f64 * 0.4) as u8;
+                            let bg = canvas.get_pixel(dst_x, dst_y);
+                            let a = alpha as f64 / 255.0;
+                            let r = (p[0] as f64 * a + bg[0] as f64 * (1.0 - a)) as u8;
+                            let g = (p[1] as f64 * a + bg[1] as f64 * (1.0 - a)) as u8;
+                            let b = (p[2] as f64 * a + bg[2] as f64 * (1.0 - a)) as u8;
+                            canvas.put_pixel(dst_x, dst_y, image::Rgba([r, g, b, 255]));
+                        }
+                    }
+                }
+            }
+            true
+        } else {
+            false
+        }
+    };
+
+    if !icon_loaded {
+        // Fallback: draw a simple colored symbol
+        match faction {
+            "radiant" => {
+                let color = image::Rgba([30, 80, 40, 255]);
+                // Sun-burst pattern
+                for angle in 0..12 {
+                    let a = (angle as f64) * std::f64::consts::PI / 6.0;
+                    for r in 15..45i32 {
+                        let x = 64 + (r as f64 * a.cos()) as i32;
+                        let y = 64 + (r as f64 * a.sin()) as i32;
+                        if x >= 0 && x < 128 && y >= 0 && y < 128 {
+                            canvas.put_pixel(x as u32, y as u32, color);
+                        }
+                    }
+                }
+                draw_filled_circle(&mut canvas, 64, 64, 15, image::Rgba([25, 65, 35, 255]));
+            }
+            "dire" => {
+                let color = image::Rgba([80, 25, 25, 255]);
+                draw_filled_circle(&mut canvas, 64, 64, 30, color);
+                draw_filled_circle(&mut canvas, 64, 64, 20, image::Rgba([50, 15, 15, 255]));
+                // "Eyes" in the circle
+                draw_filled_circle(&mut canvas, 54, 58, 5, image::Rgba([100, 30, 30, 255]));
+                draw_filled_circle(&mut canvas, 74, 58, 5, image::Rgba([100, 30, 30, 255]));
+            }
+            _ => {}
+        }
+    }
+
+    let gif_buf = rgba_to_gif(canvas);
+
+    let mut inner = state.write().await;
+    inner.hero_image_cache.insert(cache_key, gif_buf);
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(ch) => ch.to_uppercase().to_string() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+fn extract_wiki_image_url(json_text: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(json_text).ok()?;
+    let pages = parsed.get("query")?.get("pages")?.as_object()?;
+    for (_id, page) in pages {
+        if let Some(imageinfo) = page.get("imageinfo") {
+            if let Some(arr) = imageinfo.as_array() {
+                if let Some(first) = arr.first() {
+                    return first
+                        .get("url")
+                        .and_then(|u| u.as_str())
+                        .map(|s| s.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn build_text_bar(current: u32, max: u32, bar_len: usize) -> String {
     if max == 0 {
         return "|".repeat(0) + &".".repeat(bar_len);
@@ -506,57 +859,134 @@ async fn handle_text_request(
     };
 
     let text = match line.as_str() {
-        "name" => hero.map(|h| {
-            if h.player_name.is_empty() { h.display_name.clone() } else { h.player_name.clone() }
-        }).unwrap_or_default(),
-        "level" => hero.map(|h| {
-            if h.alive { format!("Lv {}", h.level) } else { format!("Lv {} DEAD", h.level) }
-        }).unwrap_or_default(),
-        "hp" => hero.map(|h| {
-            let bar = build_text_bar(h.health, h.max_health, 10);
-            format!("HP {} {}/{}", bar, h.health, h.max_health)
-        }).unwrap_or_default(),
-        "mana" => hero.map(|h| {
-            let bar = build_text_bar(h.mana, h.max_mana, 10);
-            format!("MP {} {}/{}", bar, h.mana, h.max_mana)
-        }).unwrap_or_default(),
+        "name" => hero
+            .map(|h| {
+                if h.player_name.is_empty() {
+                    h.display_name.clone()
+                } else {
+                    h.player_name.clone()
+                }
+            })
+            .unwrap_or_default(),
+        "level" => hero
+            .map(|h| {
+                if h.alive {
+                    format!("Lv {}", h.level)
+                } else {
+                    format!("Lv {} DEAD", h.level)
+                }
+            })
+            .unwrap_or_default(),
+        "hp" => hero
+            .map(|h| {
+                let bar = build_text_bar(h.health, h.max_health, 10);
+                format!("HP {} {}/{}", bar, h.health, h.max_health)
+            })
+            .unwrap_or_default(),
+        "mana" => hero
+            .map(|h| {
+                let bar = build_text_bar(h.mana, h.max_mana, 10);
+                format!("MP {} {}/{}", bar, h.mana, h.max_mana)
+            })
+            .unwrap_or_default(),
 
         "items_header" => "-- ITEMS --".to_string(),
         l if l.starts_with("item_") => {
             if let Ok(idx) = l[5..].parse::<usize>() {
-                gs.items.get(idx).map(|item| {
-                    let name = item_display_name(&item.name);
-                    if item.charges > 0 { format!("{} ({})", name, item.charges) } else { name }
-                }).unwrap_or_else(|| "---".to_string())
-            } else { String::new() }
+                gs.items
+                    .get(idx)
+                    .map(|item| {
+                        let name = item_display_name(&item.name);
+                        if item.charges > 0 {
+                            format!("{} ({})", name, item.charges)
+                        } else {
+                            name
+                        }
+                    })
+                    .unwrap_or_else(|| "---".to_string())
+            } else {
+                String::new()
+            }
         }
 
+        "gold_label" => "GOLD".to_string(),
+        "gold_amount" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("{}", s.gold))
+            .unwrap_or_else(|| "0".to_string()),
+        "buyback_label" => "BUYBACK".to_string(),
+        "buyback" => gs
+            .buyback_cost
+            .map(|c| format!("{}", c))
+            .unwrap_or_else(|| "---".to_string()),
+
+        "kills_line" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("Kills: {}", s.kills))
+            .unwrap_or_else(|| "Kills: 0".to_string()),
+        "deaths_line" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("Deaths: {}", s.deaths))
+            .unwrap_or_else(|| "Deaths: 0".to_string()),
+        "assists_line" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("Assists: {}", s.assists))
+            .unwrap_or_else(|| "Assists: 0".to_string()),
+
+        "radiant_label" => "RADIANT".to_string(),
+        "radiant_score" => gs
+            .radiant_score
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "0".to_string()),
+        "dire_label" => "DIRE".to_string(),
+        "dire_score" => gs
+            .dire_score
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "0".to_string()),
+
         "stats_header" => "-- STATS --".to_string(),
-        "kda" => gs.player_stats.as_ref().map(|s|
-            format!("K {} / D {} / A {}", s.kills, s.deaths, s.assists)
-        ).unwrap_or_default(),
-        "gold" => gs.player_stats.as_ref().map(|s|
-            format!("Gold: {}", s.gold)
-        ).unwrap_or_default(),
-        "gpm_xpm" => gs.player_stats.as_ref().map(|s|
-            format!("GPM {} XPM {}", s.gpm, s.xpm)
-        ).unwrap_or_default(),
-        "lh_dn" => gs.player_stats.as_ref().map(|s|
-            format!("LH {} / DN {}", s.last_hits, s.denies)
-        ).unwrap_or_default(),
+        "kda" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("K {} / D {} / A {}", s.kills, s.deaths, s.assists))
+            .unwrap_or_default(),
+        "gold" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("Gold: {}", s.gold))
+            .unwrap_or_default(),
+        "gpm_xpm" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("GPM {} XPM {}", s.gpm, s.xpm))
+            .unwrap_or_default(),
+        "lh_dn" => gs
+            .player_stats
+            .as_ref()
+            .map(|s| format!("LH {} / DN {}", s.last_hits, s.denies))
+            .unwrap_or_default(),
 
         "abilities_header" => "-- ABILITIES --".to_string(),
         l if l.starts_with("ability_") => {
             if let Ok(idx) = l[8..].parse::<usize>() {
-                gs.abilities.get(idx).map(|a| {
-                    let name = ability_display_name(&a.name);
-                    if a.cooldown > 0.0 {
-                        format!("[{}] {} CD:{:.0}s", a.level, name, a.cooldown)
-                    } else {
-                        format!("[{}] {}", a.level, name)
-                    }
-                }).unwrap_or_else(|| "---".to_string())
-            } else { String::new() }
+                gs.abilities
+                    .get(idx)
+                    .map(|a| {
+                        let name = ability_display_name(&a.name);
+                        if a.cooldown > 0.0 {
+                            format!("[{}] {} CD:{:.0}s", a.level, name, a.cooldown)
+                        } else {
+                            format!("[{}] {}", a.level, name)
+                        }
+                    })
+                    .unwrap_or_else(|| "---".to_string())
+            } else {
+                String::new()
+            }
         }
 
         "game_header" => "-- GAME --".to_string(),
@@ -566,15 +996,15 @@ async fn handle_text_request(
                 let m = secs / 60;
                 let s = (secs % 60).abs();
                 format!("Time: {}:{:02}", m, s)
-            } else { "Time: --:--".to_string() }
-        }
-        "daytime" => {
-            match gs.daytime {
-                Some(true) => "Day".to_string(),
-                Some(false) => "Night".to_string(),
-                None => String::new(),
+            } else {
+                "Time: --:--".to_string()
             }
         }
+        "daytime" => match gs.daytime {
+            Some(true) => "Day".to_string(),
+            Some(false) => "Night".to_string(),
+            None => String::new(),
+        },
         "hero_name" => hero.map(|h| h.display_name.clone()).unwrap_or_default(),
 
         _ => String::new(),
@@ -620,10 +1050,7 @@ fn parse_gsi_payload(payload: &serde_json::Value) -> Option<Dota2GameState> {
         .and_then(|m| m.get("clock_time"))
         .and_then(|t| t.as_f64());
 
-    let is_spectating = payload
-        .get("player")
-        .and_then(|p| p.get("team2"))
-        .is_some();
+    let is_spectating = payload.get("player").and_then(|p| p.get("team2")).is_some();
 
     let mut heroes = Vec::new();
 
@@ -675,6 +1102,28 @@ fn parse_gsi_payload(payload: &serde_json::Value) -> Option<Dota2GameState> {
         .and_then(|m| m.get("daytime"))
         .and_then(|d| d.as_bool());
 
+    let radiant_score = payload
+        .get("map")
+        .and_then(|m| m.get("radiant_score"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
+    let dire_score = payload
+        .get("map")
+        .and_then(|m| m.get("dire_score"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
+    let buyback_cost = if !is_spectating {
+        payload
+            .get("player")
+            .and_then(|p| p.get("buyback_cost"))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+    } else {
+        None
+    };
+
     let player_stats = if !is_spectating {
         payload.get("player").map(|p| PlayerStats {
             kills: p.get("kills").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
@@ -715,6 +1164,9 @@ fn parse_gsi_payload(payload: &serde_json::Value) -> Option<Dota2GameState> {
         player_stats,
         items,
         abilities,
+        radiant_score,
+        dire_score,
+        buyback_cost,
     })
 }
 
@@ -736,15 +1188,9 @@ fn parse_hero_data(data: &serde_json::Value) -> Option<HeroInfo> {
         display_name,
         player_name: String::new(),
         health: data.get("health").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-        max_health: data
-            .get("max_health")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32,
+        max_health: data.get("max_health").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         mana: data.get("mana").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-        max_mana: data
-            .get("max_mana")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32,
+        max_mana: data.get("max_mana").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         level: data.get("level").and_then(|v| v.as_u64()).unwrap_or(1) as u32,
         alive: data.get("alive").and_then(|v| v.as_bool()).unwrap_or(true),
     })
@@ -756,11 +1202,18 @@ fn parse_items(payload: &serde_json::Value) -> Vec<ItemSlot> {
         for i in 0..6 {
             let key = format!("slot{}", i);
             if let Some(slot) = items_obj.get(&key) {
-                let name = slot.get("name").and_then(|n| n.as_str()).unwrap_or("empty").to_string();
+                let name = slot
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("empty")
+                    .to_string();
                 let charges = slot.get("charges").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 items.push(ItemSlot { name, charges });
             } else {
-                items.push(ItemSlot { name: "empty".to_string(), charges: 0 });
+                items.push(ItemSlot {
+                    name: "empty".to_string(),
+                    charges: 0,
+                });
             }
         }
     }
@@ -773,7 +1226,11 @@ fn parse_abilities(payload: &serde_json::Value) -> Vec<AbilitySlot> {
         for i in 0..6 {
             let key = format!("ability{}", i);
             if let Some(ab) = abs_obj.get(&key) {
-                let name = ab.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                let name = ab
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 if name.is_empty() || name.starts_with("generic_hidden") {
                     continue;
                 }
@@ -781,8 +1238,14 @@ fn parse_abilities(payload: &serde_json::Value) -> Vec<AbilitySlot> {
                     name,
                     level: ab.get("level").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
                     cooldown: ab.get("cooldown").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                    can_cast: ab.get("can_cast").and_then(|v| v.as_bool()).unwrap_or(false),
-                    ultimate: ab.get("ultimate").and_then(|v| v.as_bool()).unwrap_or(false),
+                    can_cast: ab
+                        .get("can_cast")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    ultimate: ab
+                        .get("ultimate")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                 });
             }
         }
@@ -826,7 +1289,10 @@ fn ability_display_name(raw: &str) -> String {
 
 // ── Hero image handling ──
 
-async fn ensure_hero_image_cached(state: &SharedDota2State, short_name: &str) -> Result<(), String> {
+async fn ensure_hero_image_cached(
+    state: &SharedDota2State,
+    short_name: &str,
+) -> Result<(), String> {
     {
         let inner = state.read().await;
         if inner.hero_image_cache.contains_key(short_name) {
@@ -861,10 +1327,7 @@ async fn ensure_hero_image_cached(state: &SharedDota2State, short_name: &str) ->
         .map_err(|e| format!("Failed to download hero image: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!(
-            "Hero image download failed: {}",
-            response.status()
-        ));
+        return Err(format!("Hero image download failed: {}", response.status()));
     }
 
     let bytes = response
@@ -879,7 +1342,12 @@ async fn ensure_hero_image_cached(state: &SharedDota2State, short_name: &str) ->
     let mut canvas = image::RgbaImage::new(128, 128);
     let offset_x = (128 - resized.width()) / 2;
     let offset_y = (128 - resized.height()) / 2;
-    image::imageops::overlay(&mut canvas, &resized.to_rgba8(), offset_x as i64, offset_y as i64);
+    image::imageops::overlay(
+        &mut canvas,
+        &resized.to_rgba8(),
+        offset_x as i64,
+        offset_y as i64,
+    );
     let rgba = canvas;
 
     let mut gif_buf = Vec::new();
@@ -939,7 +1407,9 @@ async fn ensure_item_image_cached(state: &SharedDota2State, item_name: &str) -> 
         .map_err(|e| format!("Failed to read item image bytes: {}", e))?;
 
     let mut inner = state.write().await;
-    inner.item_png_cache.insert(short.to_string(), bytes.to_vec());
+    inner
+        .item_png_cache
+        .insert(short.to_string(), bytes.to_vec());
     Ok(())
 }
 
@@ -981,7 +1451,12 @@ async fn generate_and_cache_items_composite(state: &SharedDota2State) {
                     let resized = img.resize(cell_w, cell_h, image::imageops::FilterType::Lanczos3);
                     let rx = cell_x + (cell_w.saturating_sub(resized.width())) / 2;
                     let ry = cell_y + (cell_h.saturating_sub(resized.height())) / 2;
-                    image::imageops::overlay(&mut canvas, &resized.to_rgba8(), rx as i64, ry as i64);
+                    image::imageops::overlay(
+                        &mut canvas,
+                        &resized.to_rgba8(),
+                        rx as i64,
+                        ry as i64,
+                    );
                 }
             }
         }
@@ -996,12 +1471,12 @@ async fn generate_and_cache_items_composite(state: &SharedDota2State) {
     };
 
     let mut inner = state.write().await;
-    inner.hero_image_cache.insert("_items_composite".to_string(), gif_buf);
+    inner
+        .hero_image_cache
+        .insert("_items_composite".to_string(), gif_buf);
 }
 
-async fn handle_items_composite(
-    State(state): State<SharedDota2State>,
-) -> Response {
+async fn handle_items_composite(State(state): State<SharedDota2State>) -> Response {
     let inner = state.read().await;
     if let Some(data) = inner.hero_image_cache.get("_items_composite") {
         (
@@ -1098,9 +1573,7 @@ fn get_steam_library_paths() -> Vec<String> {
     }
 
     let default_steam = Path::new(r"C:\Program Files (x86)\Steam");
-    let vdf_path = default_steam
-        .join("steamapps")
-        .join("libraryfolders.vdf");
+    let vdf_path = default_steam.join("steamapps").join("libraryfolders.vdf");
 
     if let Ok(content) = std::fs::read_to_string(&vdf_path) {
         for line in content.lines() {
