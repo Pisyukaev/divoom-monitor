@@ -8,7 +8,6 @@ import {
   VideoPause,
   Search,
   FolderOpened,
-  Check,
   Refresh,
 } from '@element-plus/icons-vue';
 
@@ -21,7 +20,7 @@ import {
   autoDetectDota2Path,
   configureDota2Gsi,
 } from '../composables/useDota2';
-import type { Dota2Status, Dota2HeroInfo, Dota2PlayerStats, Dota2ItemSlot, Dota2AbilitySlot } from '../types/dota2';
+import type { Dota2Status, Dota2HeroInfo, Dota2PlayerStats } from '../types/dota2';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -43,8 +42,9 @@ const gameTime = ref<number | null>(null);
 const mapState = ref<string | null>(null);
 const daytime = ref<boolean | null>(null);
 const playerStats = ref<Dota2PlayerStats | null>(null);
-const items = ref<Dota2ItemSlot[]>([]);
-const abilities = ref<Dota2AbilitySlot[]>([]);
+const radiantScore = ref<number | null>(null);
+const direScore = ref<number | null>(null);
+const buybackCost = ref<number | null>(null);
 
 const port = ref(44444);
 const dotaPath = ref<string | null>(null);
@@ -88,18 +88,6 @@ function heroMpPercent(hero: Dota2HeroInfo): number {
   return Math.round((hero.mana / hero.max_mana) * 100);
 }
 
-function itemDisplayName(raw: string): string {
-  const short = raw.startsWith('item_') ? raw.slice(5) : raw;
-  if (short === 'empty') return '---';
-  return short.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-}
-
-function abilityDisplayName(raw: string): string {
-  const parts = raw.split('_');
-  const meaningful = parts.length > 1 ? parts.slice(1).join('_') : raw;
-  return meaningful.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-}
-
 async function pollStatus() {
   try {
     const status: Dota2Status = await fetchDota2Status();
@@ -110,8 +98,9 @@ async function pollStatus() {
     mapState.value = status.game_state.map_state ?? null;
     daytime.value = status.game_state.daytime ?? null;
     playerStats.value = status.game_state.player_stats ?? null;
-    items.value = status.game_state.items ?? [];
-    abilities.value = status.game_state.abilities ?? [];
+    radiantScore.value = status.game_state.radiant_score ?? null;
+    direScore.value = status.game_state.dire_score ?? null;
+    buybackCost.value = status.game_state.buyback_cost ?? null;
   } catch (err) {
     console.error('[Dota2] Poll error:', err);
   }
@@ -145,6 +134,9 @@ async function handleStop() {
     serverRunning.value = false;
     gameActive.value = false;
     heroes.value = [];
+    radiantScore.value = null;
+    direScore.value = null;
+    buybackCost.value = null;
     saveDota2Settings(deviceIp.value, {
       enabled: false,
       port: port.value,
@@ -264,9 +256,6 @@ onUnmounted(() => {
               {{ t('dota2.createGsiConfig') }}
             </el-button>
             <el-tag v-if="gsiConfigured" type="success" size="small">
-              <el-icon>
-                <Check />
-              </el-icon>
               {{ t('dota2.gsiReady') }}
             </el-tag>
           </div>
@@ -360,53 +349,56 @@ onUnmounted(() => {
         </div>
 
         <div v-if="heroes.length === 1" class="solo-extras">
-          <div v-if="playerStats" class="extra-panel">
-            <h4>{{ t('dota2.statsTitle') }}</h4>
+          <div v-if="playerStats" class="extra-panel gold-panel">
+            <h4>{{ t('dota2.goldTitle') }}</h4>
             <div class="stats-grid">
-              <div class="stat-item">
-                <span class="stat-value kda">{{ playerStats.kills }} / {{ playerStats.deaths }} / {{ playerStats.assists
-                  }}</span>
-                <span class="stat-label">KDA</span>
-              </div>
               <div class="stat-item">
                 <span class="stat-value gold">{{ playerStats.gold }}</span>
                 <span class="stat-label">{{ t('dota2.gold') }}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-value">{{ playerStats.gpm }}</span>
-                <span class="stat-label">GPM</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value">{{ playerStats.xpm }}</span>
-                <span class="stat-label">XPM</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-value">{{ playerStats.last_hits }} / {{ playerStats.denies }}</span>
-                <span class="stat-label">LH / DN</span>
+                <span class="stat-value buyback">{{ buybackCost ?? '---' }}</span>
+                <span class="stat-label">{{ t('dota2.buyback') }}</span>
               </div>
             </div>
+            <div class="screen-label-inline">{{ t('dota2.screenN', { n: 2 }) }}</div>
           </div>
 
-          <div v-if="items.length > 0" class="extra-panel">
-            <h4>{{ t('dota2.itemsTitle') }}</h4>
-            <div class="items-grid">
-              <div v-for="(item, idx) in items" :key="idx" class="item-slot">
-                {{ itemDisplayName(item.name) }}
-                <span v-if="item.charges > 0" class="item-charges">({{ item.charges }})</span>
+          <div v-if="playerStats" class="extra-panel kda-panel">
+            <h4>{{ t('dota2.kdaTitle') }}</h4>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-value kills">{{ playerStats.kills }}</span>
+                <span class="stat-label">{{ t('dota2.kills') }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value deaths">{{ playerStats.deaths }}</span>
+                <span class="stat-label">{{ t('dota2.deaths') }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value assists">{{ playerStats.assists }}</span>
+                <span class="stat-label">{{ t('dota2.assists') }}</span>
               </div>
             </div>
+            <div class="screen-label-inline">{{ t('dota2.screenN', { n: 3 }) }}</div>
           </div>
 
-          <div v-if="abilities.length > 0" class="extra-panel">
-            <h4>{{ t('dota2.abilitiesTitle') }}</h4>
-            <div class="abilities-grid">
-              <div v-for="(ab, idx) in abilities" :key="idx" class="ability-slot"
-                :class="{ 'on-cooldown': ab.cooldown > 0, 'ultimate': ab.ultimate }">
-                <span class="ability-name">{{ abilityDisplayName(ab.name) }}</span>
-                <el-tag size="small" type="info">Lv {{ ab.level }}</el-tag>
-                <span v-if="ab.cooldown > 0" class="ability-cd">CD: {{ Math.ceil(ab.cooldown) }}s</span>
-              </div>
+          <div class="extra-panel radiant-panel">
+            <h4>{{ t('dota2.radiant') }}</h4>
+            <div class="team-score">
+              <span class="team-score-value radiant">{{ radiantScore ?? 0 }}</span>
+              <span class="stat-label">{{ t('dota2.teamKills') }}</span>
             </div>
+            <div class="screen-label-inline">{{ t('dota2.screenN', { n: 4 }) }}</div>
+          </div>
+
+          <div class="extra-panel dire-panel">
+            <h4>{{ t('dota2.dire') }}</h4>
+            <div class="team-score">
+              <span class="team-score-value dire">{{ direScore ?? 0 }}</span>
+              <span class="stat-label">{{ t('dota2.teamKills') }}</span>
+            </div>
+            <div class="screen-label-inline">{{ t('dota2.screenN', { n: 5 }) }}</div>
           </div>
         </div>
       </div>
@@ -644,12 +636,24 @@ onUnmounted(() => {
   color: var(--el-text-color-primary);
 }
 
-.stat-value.kda {
-  color: var(--el-color-danger);
-}
-
 .stat-value.gold {
   color: #FFD700;
+}
+
+.stat-value.buyback {
+  color: #FF6B6B;
+}
+
+.stat-value.kills {
+  color: #4CAF50;
+}
+
+.stat-value.deaths {
+  color: #F44336;
+}
+
+.stat-value.assists {
+  color: #2196F3;
 }
 
 .stat-label {
@@ -658,59 +662,41 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.items-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.item-slot {
-  padding: 8px;
-  border-radius: 6px;
-  background-color: var(--el-fill-color);
-  font-size: 13px;
-  text-align: center;
-  color: var(--el-text-color-primary);
-}
-
-.item-charges {
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
-}
-
-.abilities-grid {
+.team-score {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.ability-slot {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background-color: var(--el-fill-color);
+  gap: 4px;
+  padding: 8px 0;
 }
 
-.ability-slot.on-cooldown {
-  opacity: 0.6;
+.team-score-value {
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.ability-slot.ultimate {
-  border-left: 3px solid var(--el-color-warning);
+.team-score-value.radiant {
+  color: #4CAF50;
 }
 
-.ability-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--el-text-color-primary);
+.team-score-value.dire {
+  color: #F44336;
 }
 
-.ability-cd {
-  font-size: 12px;
-  color: var(--el-color-danger);
-  font-weight: 600;
+.radiant-panel {
+  border-left: 3px solid #4CAF50;
+}
+
+.dire-panel {
+  border-left: 3px solid #F44336;
+}
+
+.screen-label-inline {
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  text-align: right;
+  margin-top: 8px;
 }
 
 @media (max-width: 768px) {
