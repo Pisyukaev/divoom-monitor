@@ -43,6 +43,9 @@ export interface Dota2GameState {
   player_stats: Dota2PlayerStats | null;
   items: Dota2ItemSlot[];
   abilities: Dota2AbilitySlot[];
+  radiant_score: number | null;
+  dire_score: number | null;
+  buyback_cost: number | null;
 }
 
 export interface Dota2Status {
