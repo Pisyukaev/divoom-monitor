@@ -18,8 +18,6 @@ use crate::divoom_api::send_command;
 
 const HERO_CDN_BASE: &str =
     "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes";
-const ITEM_CDN_BASE: &str =
-    "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/items";
 const GAME_END_TIMEOUT_SECS: u64 = 30;
 
 // ── Shared state ──
@@ -111,7 +109,6 @@ pub struct Dota2Inner {
     pub port: u16,
     pub last_gsi_time: Option<Instant>,
     pub hero_image_cache: HashMap<String, Vec<u8>>,
-    pub item_png_cache: HashMap<String, Vec<u8>>,
     pub screens_initialized: bool,
     pub previous_hero_names: Vec<String>,
     pub previous_item_names: Vec<String>,
@@ -130,7 +127,6 @@ pub fn create_shared_state(cache_dir: PathBuf) -> SharedDota2State {
         port: 44444,
         last_gsi_time: None,
         hero_image_cache: HashMap::new(),
-        item_png_cache: HashMap::new(),
         screens_initialized: false,
         previous_hero_names: Vec::new(),
         previous_item_names: Vec::new(),
@@ -298,6 +294,8 @@ async fn handle_gsi_post(
 
 fn build_text_item(
     text_id: u32,
+    font: u32,
+    text_width: u32,
     x: u32,
     y: u32,
     url: &str,
@@ -307,10 +305,11 @@ fn build_text_item(
     serde_json::json!({
         "TextId": text_id,
         "type": 23,
-        "x": x, "y": y,
+        "x": x,
+        "y": y,
         "dir": 0,
-        "font": 4,
-        "TextWidth": 128,
+        "font": font,
+        "TextWidth": text_width,
         "Textheight": 16,
         "TextString": url,
         "speed": 100,
@@ -340,10 +339,10 @@ async fn init_team_screens(
             "NewFlag": 1,
             "BackgroudGif": image_url,
             "ItemList": [
-                build_text_item(bid+1, 0, 0,   &format!("{}/name", tb),  "#FFFFFF", 5),
-                build_text_item(bid+2, 0, 82,  &format!("{}/level", tb), "#FFD700", 1),
-                build_text_item(bid+3, 0, 98,  &format!("{}/hp", tb),    "#4CAF50", 1),
-                build_text_item(bid+4, 0, 114, &format!("{}/mana", tb),  "#2196F3", 1),
+                build_text_item(bid+1, 4, 128, 0, 0,   &format!("{}/name", tb),  "#FFFFFF", 5),
+                build_text_item(bid+2, 4, 128, 0, 82,  &format!("{}/level", tb), "#FFD700", 1),
+                build_text_item(bid+3, 4, 128, 0, 98,  &format!("{}/hp", tb),    "#4CAF50", 1),
+                build_text_item(bid+4, 4, 128, 0, 114, &format!("{}/mana", tb),  "#2196F3", 1),
             ]
         });
         let _ = send_command(device_ip, &cmd).await;
@@ -374,13 +373,14 @@ async fn init_solo_screens(
     // Screen 0: Hero portrait + level + HP + mana
     let cmd0 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 0, "NewFlag": 1,
+        "LcdIndex": 0,
+        "NewFlag": 1,
         "BackgroudGif": hero_url,
         "ItemList": [
-            build_text_item(1, 0, 0,   &format!("{}/name", tb),  "#FFFFFF", 5),
-            build_text_item(2, 0, 82,  &format!("{}/level", tb), "#FFD700", 1),
-            build_text_item(3, 0, 98,  &format!("{}/hp", tb),    "#4CAF50", 1),
-            build_text_item(4, 0, 114, &format!("{}/mana", tb),  "#2196F3", 1),
+            build_text_item(1, 4, 128, 0, 0,   &format!("{}/name", tb),  "#FFFFFF", 5),
+            build_text_item(2, 4, 128, 0, 82,  &format!("{}/level", tb), "#FFD700", 1),
+            build_text_item(3, 4, 128, 0, 98,  &format!("{}/hp", tb),    "#4CAF50", 1),
+            build_text_item(4, 4, 128, 0, 114, &format!("{}/mana", tb),  "#2196F3", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd0).await;
@@ -388,13 +388,12 @@ async fn init_solo_screens(
     // Screen 1: Gold + Buyback cost
     let cmd1 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 1, "NewFlag": 1,
+        "LcdIndex": 1,
+        "NewFlag": 1,
         "BackgroudGif": gold_url,
         "ItemList": [
-            build_text_item(11, 4, 20, &format!("{}/gold_label", tb),  "#BBBBBB", 60),
-            build_text_item(12, 4, 38, &format!("{}/gold_amount", tb), "#FFD700", 1),
-            build_text_item(13, 4, 70, &format!("{}/buyback_label", tb), "#BBBBBB", 60),
-            build_text_item(14, 4, 88, &format!("{}/buyback", tb),     "#FF6B6B", 1),
+            build_text_item(11, 4, 128, 48, 20, &format!("{}/gold_label", tb),  "#FFFFFF", 60),
+            build_text_item(12, 24, 128, 32, 56, &format!("{}/gold_amount", tb), "#FFD700", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd1).await;
@@ -402,24 +401,26 @@ async fn init_solo_screens(
     // Screen 2: KDA
     let cmd2 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 2, "NewFlag": 1,
+        "LcdIndex": 2,
+        "NewFlag": 1,
         "BackgroudGif": kda_url,
         "ItemList": [
-            build_text_item(21, 4, 10, &format!("{}/kills_line", tb),   "#4CAF50", 1),
-            build_text_item(22, 4, 50, &format!("{}/deaths_line", tb),  "#F44336", 1),
-            build_text_item(23, 4, 90, &format!("{}/assists_line", tb), "#2196F3", 1),
+            build_text_item(21, 4, 40, 15, 90, &format!("{}/kills_line", tb),   "#FFFFFF", 1),
+            build_text_item(22, 4, 40, 60, 90, &format!("{}/deaths_line", tb),  "#FFFFFF", 1),
+            build_text_item(23, 4, 40, 100, 90, &format!("{}/assists_line", tb), "#FFFFFF", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd2).await;
 
     // Screen 3: Radiant kills
     let cmd3 = serde_json::json!({
-        "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 3, "NewFlag": 1,
-        "BackgroudGif": radiant_url,
-        "ItemList": [
-            build_text_item(31, 0, 10,  &format!("{}/radiant_label", tb), "#66BB6A", 60),
-            build_text_item(32, 0, 50,  &format!("{}/radiant_score", tb), "#4CAF50", 1),
+    "Command": "Draw/SendHttpItemList",
+    "LcdIndex": 3,
+    "NewFlag": 1,
+    "BackgroudGif": radiant_url,
+    "ItemList": [
+        build_text_item(31, 4, 128, 48, 10,  &format!("{}/radiant_label", tb), "#66BB6A", 60),
+        build_text_item(32, 24,128, 50, 64,  &format!("{}/radiant_score", tb), "#4CAF50", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd3).await;
@@ -427,26 +428,15 @@ async fn init_solo_screens(
     // Screen 4: Dire kills
     let cmd4 = serde_json::json!({
         "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 4, "NewFlag": 1,
+        "LcdIndex": 4,
+        "NewFlag": 1,
         "BackgroudGif": dire_url,
         "ItemList": [
-            build_text_item(41, 0, 10,  &format!("{}/dire_label", tb), "#EF5350", 60),
-            build_text_item(42, 0, 50,  &format!("{}/dire_score", tb), "#F44336", 1),
+            build_text_item(31, 4, 128, 48, 10,  &format!("{}/dire_label", tb), "#EF5350", 60),
+            build_text_item(32, 24, 128, 50, 64,  &format!("{}/dire_score", tb), "#F44336", 1),
         ]
     });
     let _ = send_command(device_ip, &cmd4).await;
-}
-
-async fn update_items_screen(state: &SharedDota2State, device_ip: &str, local_ip: &str, port: u16) {
-    generate_and_cache_items_composite(state).await;
-    let items_url = format!("http://{}:{}/items_composite.gif", local_ip, port);
-    let cmd = serde_json::json!({
-        "Command": "Draw/SendHttpItemList",
-        "LcdIndex": 1, "NewFlag": 1,
-        "BackgroudGif": items_url,
-        "ItemList": []
-    });
-    let _ = send_command(device_ip, &cmd).await;
 }
 
 async fn ensure_dark_bg_cached(state: &SharedDota2State) {
@@ -489,44 +479,6 @@ fn draw_filled_circle(
     }
 }
 
-fn draw_filled_ellipse(
-    canvas: &mut image::RgbaImage,
-    cx: i32,
-    cy: i32,
-    rx: i32,
-    ry: i32,
-    color: image::Rgba<u8>,
-) {
-    for y in (cy - ry)..=(cy + ry) {
-        for x in (cx - rx)..=(cx + rx) {
-            let dx = (x - cx) as f64 / rx as f64;
-            let dy = (y - cy) as f64 / ry as f64;
-            if dx * dx + dy * dy <= 1.0 {
-                if x >= 0 && x < 128 && y >= 0 && y < 128 {
-                    canvas.put_pixel(x as u32, y as u32, color);
-                }
-            }
-        }
-    }
-}
-
-fn draw_filled_rect(
-    canvas: &mut image::RgbaImage,
-    x1: i32,
-    y1: i32,
-    x2: i32,
-    y2: i32,
-    color: image::Rgba<u8>,
-) {
-    for y in y1..=y2 {
-        for x in x1..=x2 {
-            if x >= 0 && x < 128 && y >= 0 && y < 128 {
-                canvas.put_pixel(x as u32, y as u32, color);
-            }
-        }
-    }
-}
-
 fn rgba_to_gif(canvas: image::RgbaImage) -> Vec<u8> {
     let mut gif_buf = Vec::new();
     {
@@ -545,29 +497,15 @@ async fn generate_gold_bg(state: &SharedDota2State) {
         }
     }
 
-    let mut canvas = image::RgbaImage::from_pixel(128, 128, image::Rgba([15, 15, 20, 255]));
+    let gold_image = image::load_from_memory(include_bytes!("assets/dota2/gold.webp")).unwrap();
+    let resized = gold_image.resize(32, 32, image::imageops::FilterType::Lanczos3);
 
-    let gold_dark = image::Rgba([180, 150, 0, 255]);
-    let gold_main = image::Rgba([255, 215, 0, 255]);
-    let gold_highlight = image::Rgba([255, 245, 130, 255]);
-    let gold_shadow = image::Rgba([140, 110, 0, 255]);
+    let mut canvas = image::RgbaImage::new(128, 128);
 
-    // Coin 1 at (100, 38) for gold line
-    draw_filled_circle(&mut canvas, 100, 38, 14, gold_shadow);
-    draw_filled_circle(&mut canvas, 100, 38, 12, gold_dark);
-    draw_filled_circle(&mut canvas, 100, 38, 10, gold_main);
-    draw_filled_circle(&mut canvas, 99, 36, 6, gold_highlight);
+    let offset_x = (128 - resized.width()) / 2 + resized.width();
+    let offset_y = (128 - resized.height()) / 2;
 
-    // Coin 2 at (100, 88) for buyback line
-    draw_filled_circle(&mut canvas, 100, 88, 14, gold_shadow);
-    draw_filled_circle(&mut canvas, 100, 88, 12, gold_dark);
-    draw_filled_circle(&mut canvas, 100, 88, 10, gold_main);
-    draw_filled_circle(&mut canvas, 99, 86, 6, gold_highlight);
-
-    // Subtle horizontal separator
-    for x in 10..118 {
-        canvas.put_pixel(x, 62, image::Rgba([40, 40, 50, 255]));
-    }
+    image::imageops::overlay(&mut canvas, &resized, offset_x as i64, offset_y as i64);
 
     let gif_buf = rgba_to_gif(canvas);
 
@@ -585,99 +523,15 @@ async fn generate_kda_bg(state: &SharedDota2State) {
         }
     }
 
-    let mut canvas = image::RgbaImage::from_pixel(128, 128, image::Rgba([15, 15, 20, 255]));
+    let kda_image = image::load_from_memory(include_bytes!("assets/dota2/kda.png")).unwrap();
+    let resized = kda_image.resize(128, 128, image::imageops::FilterType::Lanczos3);
 
-    let bone = image::Rgba([45, 42, 40, 255]);
-    let bone_dark = image::Rgba([35, 32, 30, 255]);
-    let eye_color = image::Rgba([20, 18, 18, 255]);
+    let mut canvas = image::RgbaImage::new(128, 128);
 
-    // Cranium (large ellipse, centered at 64, 48)
-    draw_filled_ellipse(&mut canvas, 64, 45, 32, 28, bone);
-    // Slightly lighter inner cranium for volume
-    draw_filled_ellipse(&mut canvas, 64, 43, 28, 24, image::Rgba([50, 47, 45, 255]));
+    let offset_x = (128 - resized.width()) / 2;
+    let offset_y = (128 - resized.height()) / 2;
 
-    // Eye sockets
-    draw_filled_ellipse(&mut canvas, 50, 44, 9, 8, eye_color);
-    draw_filled_ellipse(&mut canvas, 78, 44, 9, 8, eye_color);
-
-    // Nose cavity (inverted triangle)
-    for row in 0..8 {
-        let half_w = row + 1;
-        let y = 56 + row;
-        for x in (64 - half_w as i32)..=(64 + half_w as i32) {
-            if x >= 0 && x < 128 && y < 128 {
-                canvas.put_pixel(x as u32, y as u32, eye_color);
-            }
-        }
-    }
-
-    // Jaw area
-    draw_filled_ellipse(&mut canvas, 64, 72, 24, 10, bone_dark);
-
-    // Teeth (row of small rectangles)
-    let teeth_y = 68;
-    let tooth_w = 5i32;
-    let tooth_h = 8i32;
-    let gap = 2i32;
-    let total_teeth = 6;
-    let teeth_total_w = total_teeth * tooth_w + (total_teeth - 1) * gap;
-    let start_x = 64 - teeth_total_w / 2;
-    for t in 0..total_teeth {
-        let tx = start_x + t * (tooth_w + gap);
-        draw_filled_rect(
-            &mut canvas,
-            tx,
-            teeth_y,
-            tx + tooth_w - 1,
-            teeth_y + tooth_h - 1,
-            bone,
-        );
-    }
-
-    // Crossbones behind skull (subtle)
-    let cb_color = image::Rgba([35, 33, 30, 255]);
-    for i in -40..=40i32 {
-        let x1 = 64 + i;
-        let y1 = 64 + i / 2;
-        let y2 = 64 - i / 2;
-        for dy in -2..=2i32 {
-            if x1 >= 0 && x1 < 128 {
-                if y1 + dy >= 0 && y1 + dy < 128 {
-                    canvas.put_pixel(x1 as u32, (y1 + dy) as u32, cb_color);
-                }
-                if y2 + dy >= 0 && y2 + dy < 128 {
-                    canvas.put_pixel(x1 as u32, (y2 + dy) as u32, cb_color);
-                }
-            }
-        }
-    }
-
-    // Re-draw skull on top of crossbones so it stays clean
-    draw_filled_ellipse(&mut canvas, 64, 45, 32, 28, bone);
-    draw_filled_ellipse(&mut canvas, 64, 43, 28, 24, image::Rgba([50, 47, 45, 255]));
-    draw_filled_ellipse(&mut canvas, 50, 44, 9, 8, eye_color);
-    draw_filled_ellipse(&mut canvas, 78, 44, 9, 8, eye_color);
-    for row in 0..8 {
-        let half_w = row + 1;
-        let y = 56 + row;
-        for x in (64 - half_w as i32)..=(64 + half_w as i32) {
-            if x >= 0 && x < 128 && y < 128 {
-                canvas.put_pixel(x as u32, y as u32, eye_color);
-            }
-        }
-    }
-    draw_filled_ellipse(&mut canvas, 64, 72, 24, 10, bone_dark);
-    for t in 0..total_teeth {
-        let tx = start_x + t * (tooth_w + gap);
-        draw_filled_rect(
-            &mut canvas,
-            tx,
-            teeth_y,
-            tx + tooth_w - 1,
-            teeth_y + tooth_h - 1,
-            bone,
-        );
-    }
+    image::imageops::overlay(&mut canvas, &resized, offset_x as i64, offset_y as i64);
 
     let gif_buf = rgba_to_gif(canvas);
 
@@ -741,8 +595,7 @@ async fn ensure_faction_bg_cached(state: &SharedDota2State, faction: &str) {
         };
 
         if let Ok(img) = image::load_from_memory(&img_resp) {
-            let resized = img.resize(96, 96, image::imageops::FilterType::Lanczos3);
-            let rgba = resized.to_rgba8();
+            let rgba = img.to_rgba8();
 
             let ox = (128 - rgba.width()) / 2;
             let oy = (128 - rgba.height()) / 2;
@@ -924,18 +777,18 @@ async fn handle_text_request(
         "kills_line" => gs
             .player_stats
             .as_ref()
-            .map(|s| format!("Kills: {}", s.kills))
-            .unwrap_or_else(|| "Kills: 0".to_string()),
+            .map(|s| format!("{}", s.kills))
+            .unwrap_or_else(|| "0".to_string()),
         "deaths_line" => gs
             .player_stats
             .as_ref()
-            .map(|s| format!("Deaths: {}", s.deaths))
-            .unwrap_or_else(|| "Deaths: 0".to_string()),
+            .map(|s| format!("{}", s.deaths))
+            .unwrap_or_else(|| "0".to_string()),
         "assists_line" => gs
             .player_stats
             .as_ref()
-            .map(|s| format!("Assists: {}", s.assists))
-            .unwrap_or_else(|| "Assists: 0".to_string()),
+            .map(|s| format!("{}", s.assists))
+            .unwrap_or_else(|| "0".to_string()),
 
         "radiant_label" => "RADIANT".to_string(),
         "radiant_score" => gs
@@ -1371,110 +1224,6 @@ async fn ensure_hero_image_cached(
 }
 
 // ── Item image handling ──
-
-async fn ensure_item_image_cached(state: &SharedDota2State, item_name: &str) -> Result<(), String> {
-    let short = item_name.strip_prefix("item_").unwrap_or(item_name);
-    if short == "empty" || short.is_empty() {
-        return Ok(());
-    }
-
-    {
-        let inner = state.read().await;
-        if inner.item_png_cache.contains_key(short) {
-            return Ok(());
-        }
-    }
-
-    let png_url = format!("{}/{}.png", ITEM_CDN_BASE, short);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("HTTP client error: {}", e))?;
-
-    let response = client
-        .get(&png_url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to download item image: {}", e))?;
-
-    if !response.status().is_success() {
-        return Err(format!("Item image download failed: {}", response.status()));
-    }
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read item image bytes: {}", e))?;
-
-    let mut inner = state.write().await;
-    inner
-        .item_png_cache
-        .insert(short.to_string(), bytes.to_vec());
-    Ok(())
-}
-
-async fn generate_and_cache_items_composite(state: &SharedDota2State) {
-    let items = {
-        let inner = state.read().await;
-        inner.game_state.items.clone()
-    };
-
-    for item in &items {
-        let _ = ensure_item_image_cached(state, &item.name).await;
-    }
-
-    let gif_buf = {
-        let inner = state.read().await;
-
-        let mut canvas = image::RgbaImage::from_pixel(128, 128, image::Rgba([15, 15, 20, 255]));
-
-        let cols = 3u32;
-        let rows = 2u32;
-        let cell_w = 42u32;
-        let cell_h = 60u32;
-        let gap_x = (128 - cell_w * cols) / (cols - 1);
-        let gap_y = (128 - cell_h * rows) / (rows + 1);
-
-        for (idx, item) in items.iter().enumerate().take(6) {
-            let short = item.name.strip_prefix("item_").unwrap_or(&item.name);
-            if short == "empty" || short.is_empty() {
-                continue;
-            }
-
-            let col = (idx as u32) % cols;
-            let row = (idx as u32) / cols;
-            let cell_x = col * (cell_w + gap_x);
-            let cell_y = gap_y + row * (cell_h + gap_y);
-
-            if let Some(png_bytes) = inner.item_png_cache.get(short) {
-                if let Ok(img) = image::load_from_memory(png_bytes) {
-                    let resized = img.resize(cell_w, cell_h, image::imageops::FilterType::Lanczos3);
-                    let rx = cell_x + (cell_w.saturating_sub(resized.width())) / 2;
-                    let ry = cell_y + (cell_h.saturating_sub(resized.height())) / 2;
-                    image::imageops::overlay(
-                        &mut canvas,
-                        &resized.to_rgba8(),
-                        rx as i64,
-                        ry as i64,
-                    );
-                }
-            }
-        }
-
-        let mut buf = Vec::new();
-        {
-            let mut encoder = GifEncoder::new(&mut buf);
-            let frame = Frame::new(canvas);
-            let _ = encoder.encode_frames(std::iter::once(frame));
-        }
-        buf
-    };
-
-    let mut inner = state.write().await;
-    inner
-        .hero_image_cache
-        .insert("_items_composite".to_string(), gif_buf);
-}
 
 async fn handle_items_composite(State(state): State<SharedDota2State>) -> Response {
     let inner = state.read().await;
