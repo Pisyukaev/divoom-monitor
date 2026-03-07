@@ -12,14 +12,6 @@ pub struct DivoomDevice {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkSettings {
-    pub ssid: Option<String>,
-    pub ip_address: Option<String>,
-    pub mac_address: Option<String>,
-    pub signal_strength: Option<i32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceSettings {
     pub brightness: Option<u8>,
     pub rotation_flag: Option<u8>,
