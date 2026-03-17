@@ -3,12 +3,7 @@ using System.Text.Json.Serialization;
 using LibreHardwareMonitor.Hardware;
 using System.Net;
 using System.Text;
-using System.Collections.Generic;
-using System.Linq;
-using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 var cts = new CancellationTokenSource();
 
@@ -64,14 +59,13 @@ while (!cts.Token.IsCancellationRequested)
         float? gpuTemp = null;
         float? gpuUsage = null;
         float cpuUsageTotal = 0;
-        int cpuCoreCount = 0;
 
         var (memoryTotal, memoryUsed) = MemoryHelper.GetMemoryInfo();
 
         foreach (var hardware in computer.Hardware)
         {
             hardware.Update();
-            
+
             foreach (var sensor in hardware.Sensors)
             {
                 if (!sensor.Value.HasValue)
@@ -81,7 +75,7 @@ while (!cts.Token.IsCancellationRequested)
 
                 var value = sensor.Value.Value;
                 var sensorName = sensor.Name?.ToLower() ?? "";
-                
+
                 switch (sensor.SensorType)
                 {
                     case SensorType.Temperature:
@@ -89,7 +83,7 @@ while (!cts.Token.IsCancellationRequested)
                         {
                             continue;
                         }
-                        
+
                         switch (hardware.HardwareType)
                         {
                             case HardwareType.Cpu:
@@ -101,8 +95,9 @@ while (!cts.Token.IsCancellationRequested)
                                 {
                                     cpuTemp = value;
                                 }
+
                                 break;
-                                
+
                             case HardwareType.GpuAmd:
                             case HardwareType.GpuNvidia:
                             case HardwareType.GpuIntel:
@@ -110,14 +105,17 @@ while (!cts.Token.IsCancellationRequested)
                                 {
                                     gpuTemp = value;
                                 }
-                                else if (!gpuTemp.HasValue && !sensorName.Contains("memory") && !sensorName.Contains("junction"))
+                                else if (!gpuTemp.HasValue && !sensorName.Contains("memory") &&
+                                         !sensorName.Contains("junction"))
                                 {
                                     gpuTemp = value;
                                 }
+
                                 break;
                         }
+
                         break;
-                        
+
                     case SensorType.Load:
                         if (hardware.HardwareType == HardwareType.Cpu)
                         {
@@ -125,26 +123,23 @@ while (!cts.Token.IsCancellationRequested)
                             {
                                 cpuUsageTotal = value;
                             }
-                            else if (sensorName.StartsWith("cpu core #"))
-                            {
-                                cpuCoreCount++;
-                            }
                         }
                         else if (hardware.HardwareType is HardwareType.GpuNvidia
                                  or HardwareType.GpuAmd
                                  or HardwareType.GpuIntel)
                         {
                             if (sensorName.Contains("core") && !sensorName.Contains("memory")
-                                && !sensorName.Contains("video"))
+                                                            && !sensorName.Contains("video"))
                             {
                                 gpuUsage = value;
                             }
                         }
+
                         break;
                 }
             }
         }
-        
+
         if (!cpuTemp.HasValue)
         {
             foreach (var hardware in computer.Hardware)
@@ -158,11 +153,11 @@ while (!cts.Token.IsCancellationRequested)
                         {
                             var value = sensor.Value.Value;
                             var sensorName = sensor.Name?.ToLower() ?? "";
-                            
+
                             if (value >= -30 && value <= 200)
                             {
-                                if (sensorName.Contains("cpu") || sensorName.Contains("package") || 
-                                    sensorName.Contains("tctl") || sensorName.Contains("tdie") || 
+                                if (sensorName.Contains("cpu") || sensorName.Contains("package") ||
+                                    sensorName.Contains("tctl") || sensorName.Contains("tdie") ||
                                     sensorName.Contains("processor"))
                                 {
                                     cpuTemp = value;
@@ -172,14 +167,14 @@ while (!cts.Token.IsCancellationRequested)
                         }
                     }
                 }
-                
+
                 if (cpuTemp.HasValue)
                 {
                     break;
                 }
             }
         }
-        
+
         var disks = new List<DiskUsage>();
         var drives = DriveInfo.GetDrives();
         foreach (var drive in drives)
@@ -192,7 +187,7 @@ while (!cts.Token.IsCancellationRequested)
                     var availableSpace = (ulong)drive.AvailableFreeSpace;
                     var usedSpace = totalSpace - availableSpace;
                     var usagePercent = totalSpace > 0 ? (float)usedSpace / totalSpace * 100 : 0;
-                    
+
                     disks.Add(new DiskUsage
                     {
                         Name = drive.Name,
@@ -244,47 +239,34 @@ Console.Error.WriteLine("LibreHardwareMonitor service stopped.");
 
 class DiskUsage
 {
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = "";
-    
-    [JsonPropertyName("mount_point")]
-    public string MountPoint { get; set; } = "";
-    
-    [JsonPropertyName("total_space")]
-    public ulong TotalSpace { get; set; }
-    
-    [JsonPropertyName("available_space")]
-    public ulong AvailableSpace { get; set; }
-    
-    [JsonPropertyName("used_space")]
-    public ulong UsedSpace { get; set; }
-    
-    [JsonPropertyName("usage_percent")]
-    public float UsagePercent { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+
+    [JsonPropertyName("mount_point")] public string MountPoint { get; set; } = "";
+
+    [JsonPropertyName("total_space")] public ulong TotalSpace { get; set; }
+
+    [JsonPropertyName("available_space")] public ulong AvailableSpace { get; set; }
+
+    [JsonPropertyName("used_space")] public ulong UsedSpace { get; set; }
+
+    [JsonPropertyName("usage_percent")] public float UsagePercent { get; set; }
 }
 
 class SystemMetrics
 {
-    [JsonPropertyName("cpu_usage")]
-    public float CpuUsage { get; set; }
-    
-    [JsonPropertyName("cpu_temperature")]
-    public float? CpuTemperature { get; set; }
-    
-    [JsonPropertyName("gpu_usage")]
-    public float? GpuUsage { get; set; }
-    
-    [JsonPropertyName("gpu_temperature")]
-    public float? GpuTemperature { get; set; }
-    
-    [JsonPropertyName("memory_total")]
-    public ulong MemoryTotal { get; set; }
-    
-    [JsonPropertyName("memory_used")]
-    public ulong MemoryUsed { get; set; }
-    
-    [JsonPropertyName("disks")]
-    public List<DiskUsage> Disks { get; set; } = new();
+    [JsonPropertyName("cpu_usage")] public float CpuUsage { get; set; }
+
+    [JsonPropertyName("cpu_temperature")] public float? CpuTemperature { get; set; }
+
+    [JsonPropertyName("gpu_usage")] public float? GpuUsage { get; set; }
+
+    [JsonPropertyName("gpu_temperature")] public float? GpuTemperature { get; set; }
+
+    [JsonPropertyName("memory_total")] public ulong MemoryTotal { get; set; }
+
+    [JsonPropertyName("memory_used")] public ulong MemoryUsed { get; set; }
+
+    [JsonPropertyName("disks")] public List<DiskUsage> Disks { get; set; } = new();
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -317,6 +299,7 @@ static class MemoryHelper
         {
             return (memStatus.ullTotalPhys, memStatus.ullTotalPhys - memStatus.ullAvailPhys);
         }
+
         return (0, 0);
     }
 }
