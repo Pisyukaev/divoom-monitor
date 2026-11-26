@@ -98,6 +98,8 @@ export function installTauriMock() {
         await delay(300);
         return {
           device_id: 300012345,
+          channel_type: 1,
+          lcd_independence: 1,
           independence_list: [
             { lcd_independence: 1, lcd_list: lcdClocks.map((id) => ({ lcd_clock_id: id })) },
           ],

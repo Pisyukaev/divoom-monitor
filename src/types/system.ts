@@ -28,5 +28,18 @@ export interface LcdIndependenceInfo {
 
 export interface LcdInfoResponse {
   device_id: number;
+  /** 0 = whole dial, 1 = independent dials */
+  channel_type: number;
+  /** Independence dial currently selected on the device */
+  lcd_independence: number;
   independence_list: LcdIndependenceInfo[];
+}
+
+/** The independence dial the device is showing, falling back to the first one. */
+export function selectedIndependence(info: LcdInfoResponse): LcdIndependenceInfo | null {
+  return (
+    info.independence_list.find((i) => i.lcd_independence === info.lcd_independence) ??
+    info.independence_list[0] ??
+    null
+  );
 }

@@ -56,5 +56,9 @@ pub struct LcdIndependenceInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcdInfoResponse {
     pub device_id: u64,
+    /// 0 = whole dial, 1 = independent dials.
+    pub channel_type: u64,
+    /// The independence dial currently selected on the device.
+    pub lcd_independence: u64,
     pub independence_list: Vec<LcdIndependenceInfo>,
 }

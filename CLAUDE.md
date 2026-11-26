@@ -8,7 +8,7 @@ Divoom Monitor is a Tauri 2 desktop app (Rust backend + Vue 3/TypeScript/Element
 
 ## Commands
 
-Package manager is **pnpm**. There are no tests and no linter configured; type-checking is the main correctness gate.
+Package manager is **pnpm**. Rust unit tests cover the Divoom API layer (`pnpm test` = `cargo test`); there are no frontend tests and no linter, so type-checking is the other correctness gate.
 
 ```bash
 pnpm install
@@ -36,10 +36,11 @@ Releases: pushing to the `release` branch (or manual dispatch) runs `.github/wor
 
 ### Talking to devices
 
-- `divoom_api.rs` is the single transport: every device command is `POST http://<ip>/post` with JSON `{"Command": "...", ...}` (default 500 ms timeout; image upload uses 1 s).
+- Official API docs: http://doc.divoom-gz.com/web/#/12 (section "TimeGate"). Payload builders and response parsers are in `divoom_protocol.rs` (pure, tested against the docs' examples); keep new commands there.
+- `divoom_api.rs` is the single transport: every device command is `POST http://<ip>/post` with JSON `{"Command": "...", ...}` (default 500 ms timeout; image upload uses 1 s). A non-zero `error_code` from the device (number or string), or `ReturnCode` from the cloud, is returned as `Err`. Exception: newer Times Gate firmware answers `"DeviceToken is err"` to every request without a `LocalToken` (an undocumented numeric body field; the app does not send it yet). Verified on a device: writes such as images and brightness are still applied, so this reply passes as success; reads come back empty, so `get_device_info` checks `is_token_error` and fails. `Draw/SendHttpText` did not show any text on that device; `Draw/SendHttpItemList` did. Tests run it against a `wiremock` server; cloud calls take a base URL for that reason (`*_at` / `*_from` functions).
 - **Discovery is cloud-based, not LAN scanning**: `scan_devices` calls `https://app.divoom-gz.com/Device/ReturnSameLANDevice`, and `Hardware` codes are mapped to model names there (400 = Times Gate, 401–408 = Pixoo/Ditoo variants). A device the Divoom cloud does not report will not appear.
-- `get_lcd_info` also needs the cloud (`Channel/Get5LcdInfoV2`) to get `DeviceId` and `LcdIndependence`, which are required to activate PC Monitor (`Channel/SetClockSelectId`, `ClockId: 625`) before metrics are pushed with `Device/UpdatePCParaInfo`.
-- Images are resized to exactly 128×128, JPEG-encoded, base64'd, and sent as `Draw/SendHttpGif` with an `LCDArray` one-hot over 5 screens. `PicID` comes from a process-global counter starting at 1000.
+- `get_lcd_info` also needs the cloud (`Channel/Get5LcdInfoV2`, POST with JSON body) to get `DeviceId` and the selected `LcdIndependence` (`selectedIndependence` in `types/system.ts`), which are required to activate PC Monitor (`Channel/SetClockSelectId`, `ClockId: 625`) before metrics are pushed with `Device/UpdatePCParaInfo`.
+- Images are resized to exactly 128×128, JPEG-encoded, base64'd, and sent as `Draw/SendHttpGif` with an `LcdArray` one-hot over 5 screens. `PicID` comes from a process-global counter starting at 1000.
 - Many setter commands in `device_commands.rs` swallow errors and return `()`; the frontend cannot tell whether they succeeded.
 
 ### Adding a Tauri command

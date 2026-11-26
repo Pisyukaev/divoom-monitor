@@ -10,6 +10,7 @@
     "start:linux": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "tauri": "tauri"
   },
   "dependencies": {

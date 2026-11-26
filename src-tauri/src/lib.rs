@@ -1,6 +1,7 @@
 mod app_settings;
 mod device_commands;
 mod divoom_api;
+mod divoom_protocol;
 mod draw_commands;
 mod models;
 mod system_metrics;
