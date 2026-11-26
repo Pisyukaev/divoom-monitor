@@ -30,3 +30,6 @@ dist-ssr
 hardware-monitor-cli/bin/
 hardware-monitor-cli/obj/
 src-tauri/sidecar/
+
+# Claude Code local settings
+.claude/settings.local.json
