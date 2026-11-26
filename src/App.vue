@@ -2,6 +2,7 @@
 import { onMounted } from 'vue';
 import { RouterView } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import AppSidebar from './components/layout/AppSidebar.vue';
 import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
 import { startPcMonitorForAllDevices } from './composables/usePcMonitorSend';
 
@@ -14,62 +15,35 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-container">
-    <RouterView v-slot="{ Component, route: currentRoute }">
-      <component :is="Component" v-if="Component" :key="currentRoute.path" />
-      <div v-else class="no-route">
-        <p>{{ t('app.routeNotFound', { path: currentRoute.path }) }}</p>
-      </div>
-    </RouterView>
+  <div class="shell">
+    <AppSidebar />
+    <main class="shell-main">
+      <RouterView v-slot="{ Component, route: currentRoute }">
+        <component :is="Component" v-if="Component" />
+        <div v-else class="no-route">
+          <p>{{ t('app.routeNotFound', { path: currentRoute.path }) }}</p>
+        </div>
+      </RouterView>
+    </main>
   </div>
 </template>
 
-<style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  padding: 0;
-}
-
-#app {
-  width: 100%;
-  min-height: 100vh;
-}
-</style>
-
 <style scoped>
-.app-container {
-  min-height: 100vh;
-  background-color: var(--el-bg-color-page);
+.shell {
   display: flex;
-  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--el-bg-color-page);
 }
 
-.app-container> :deep(div) {
+.shell-main {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
 }
 
 .no-route {
   padding: 40px;
   text-align: center;
-  color: var(--el-text-color-primary);
 }
 </style>

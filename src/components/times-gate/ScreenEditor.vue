@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { FolderOpened, Link, Delete, Picture } from '@element-plus/icons-vue';
 import ScreenPreview from './ScreenPreview.vue';
 // import TextElement from './TextElement.vue';
 import type { ScreenConfig, TextElement as TextElementType } from '../../types/screen';
@@ -202,87 +203,188 @@ function handleUpdateTextPosition(textId: number, x: number, y: number) {
 //     emit('update:config', localConfig.value);
 //   }
 // }
+const imageSourceLabel = computed(() => {
+  const image = localConfig.value.image;
+  if (!image) return null;
+  if (image.type === 'url') return image.source;
+  return image.source.split(/[\\/]/).pop() ?? image.source;
+});
 </script>
 
 <template>
-  <div class="screen-editor">
-    <div class="editor-controls">
-      <el-card shadow="hover">
-        <template #header>
-          <span>{{ t('screenEditor.image') }}</span>
-        </template>
-
-        <div class="control-section">
-          <el-button type="primary" @click="handleLoadLocalImage" :loading="isLoadingImage"
-            style="width: 100%; margin-bottom: 10px">
-            {{ t('screenEditor.loadFromComputer') }}
-          </el-button>
-
-          <el-input v-model="imageUrlInput" :placeholder="t('screenEditor.imageUrl')" style="margin-bottom: 10px">
-            <template #append>
-              <el-button @click="handleLoadImageFromUrl" :loading="isLoadingImage" :disabled="!imageUrlInput.trim()">
-                {{ t('screenEditor.load') }}
-              </el-button>
-            </template>
-          </el-input>
-
-          <el-button v-if="localConfig.image" type="danger" @click="handleRemoveImage" style="width: 100%">
-            {{ t('screenEditor.removeImage') }}
-          </el-button>
-        </div>
-      </el-card>
-
-      <!-- TODO: try to solve problem with text positions greater than 64 -->
-      <!-- <TextElement :text="selectedText" :text-ids="config.textIds" @update:text="handleUpdateSelectedText"
-        @submit:text="handleSendTextToDevice" @add:text="handleAddText" /> -->
+  <section class="screen-editor app-card">
+    <div class="preview-pane">
+      <ScreenPreview :config="localConfig" :scale="320" :selected-text="selectedText"
+        @update:text-position="handleUpdateTextPosition" @text-delete="handleRemoveText"
+        @text-click="handleTextClick" />
+      <span class="app-muted preview-caption">
+        {{ t('screenEditor.screenPreview', { n: config.screenIndex + 1 }) }} · 128 × 128
+      </span>
     </div>
 
-    <div class="editor-preview">
-      <el-card shadow="hover">
-        <template #header>
-          <span>{{ t('screenEditor.screenPreview', { n: config.screenIndex + 1 }) }}</span>
-        </template>
-        <div class="preview-container">
-          <ScreenPreview :config="localConfig" :scale="400" :selected-text="selectedText"
-            @update:text-position="handleUpdateTextPosition" @text-delete="handleRemoveText"
-            @text-click="handleTextClick" />
+    <div class="controls-pane">
+      <div class="app-card-title">{{ t('screenEditor.image') }}</div>
+
+      <div v-if="localConfig.image" class="current-image">
+        <el-icon class="current-icon">
+          <Picture />
+        </el-icon>
+        <div class="current-text">
+          <div class="app-muted current-label">{{ t('screenEditor.current') }}</div>
+          <div class="current-source" :title="localConfig.image.source">{{ imageSourceLabel }}</div>
         </div>
-      </el-card>
+        <el-tooltip :content="t('screenEditor.removeImage')" placement="top">
+          <el-button :icon="Delete" text circle type="danger" @click="handleRemoveImage" />
+        </el-tooltip>
+      </div>
+
+      <button class="dropzone" :disabled="isLoadingImage" @click="handleLoadLocalImage">
+        <el-icon class="dropzone-icon" :class="{ 'is-loading': isLoadingImage }">
+          <FolderOpened />
+        </el-icon>
+        <span class="dropzone-title">{{ t('screenEditor.loadFromComputer') }}</span>
+        <span class="app-muted dropzone-hint">{{ t('screenEditor.formats') }}</span>
+      </button>
+
+      <div class="divider app-muted"><span>{{ t('screenEditor.orByUrl') }}</span></div>
+
+      <div class="url-row">
+        <el-input v-model="imageUrlInput" :prefix-icon="Link" :placeholder="t('screenEditor.imageUrl')" clearable
+          @keyup.enter="handleLoadImageFromUrl" />
+        <el-button :loading="isLoadingImage" :disabled="!imageUrlInput.trim()" @click="handleLoadImageFromUrl">
+          {{ t('screenEditor.load') }}
+        </el-button>
+      </div>
+
+      <p class="app-muted note">{{ t('screenEditor.instantNote') }}</p>
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped>
 .screen-editor {
-  display: flex;
-  gap: 20px;
-  height: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(280px, 1fr);
+  gap: 32px;
+  padding: 28px;
 }
 
-.radio-group {
+.preview-pane {
   display: flex;
-  flex-direction: row;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  flex-wrap: nowrap;
-  margin-bottom: 10px;
+  gap: 18px;
+  padding: 6px;
 }
 
-.editor-controls {
-  flex: 0 0 350px;
-  overflow-y: auto;
-  max-height: calc(100vh - 200px);
+.preview-caption {
+  font-size: 12.5px;
 }
 
-.editor-preview {
+.controls-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.current-image {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 10px 14px;
+  border-radius: var(--app-radius-sm);
+  background: var(--el-fill-color-light);
+}
+
+.current-icon {
+  font-size: 20px;
+  color: var(--el-color-primary);
+}
+
+.current-text {
   flex: 1;
-  display: flex;
-  align-items: flex-start;
+  min-width: 0;
 }
 
-.preview-container {
+.current-label {
+  font-size: 12px;
+}
+
+.current-source {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.dropzone {
   display: flex;
-  justify-content: center;
-  padding: 20px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 26px 16px;
+  border: 1.5px dashed var(--el-border-color);
+  border-radius: var(--app-radius);
+  background: var(--app-surface-muted);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.dropzone:hover:not(:disabled) {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.dropzone:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.dropzone-icon {
+  font-size: 26px;
+  color: var(--el-color-primary);
+  margin-bottom: 4px;
+}
+
+.dropzone-title {
+  font-weight: 600;
+}
+
+.dropzone-hint {
+  font-size: 12px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--el-border-color-light);
+}
+
+.url-row {
+  display: flex;
+  gap: 8px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+@media (max-width: 980px) {
+  .screen-editor {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

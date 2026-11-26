@@ -2,18 +2,29 @@ import { createApp } from 'vue';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import 'element-plus/theme-chalk/dark/css-vars.css';
+import './styles/theme.css';
 import App from './App.vue';
 import router from './router';
 import i18n from './i18n';
 import { useTheme } from './composables/useTheme';
 
-const app = createApp(App);
+async function bootstrap() {
+  // In a plain browser (`pnpm dev` without Tauri) mock the backend so the UI is usable.
+  if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window)) {
+    const { installTauriMock } = await import('./dev/mockTauri');
+    installTauriMock();
+  }
 
-app.use(ElementPlus);
-app.use(router);
-app.use(i18n);
+  const app = createApp(App);
 
-const { initTheme } = useTheme();
-initTheme();
+  app.use(ElementPlus);
+  app.use(router);
+  app.use(i18n);
 
-app.mount('#app');
+  const { initTheme } = useTheme();
+  initTheme();
+
+  app.mount('#app');
+}
+
+bootstrap();
