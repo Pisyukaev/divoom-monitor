@@ -1,13 +1,16 @@
 //! HTTP transport to Divoom devices (`POST http://<ip>/post`) and the Divoom cloud.
 //! Payload shapes live in `divoom_protocol.rs`.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::Value;
 
 use crate::divoom_protocol::{
     check_cloud_response, check_device_response, device_post_url, get_5lcd_info_body,
-    parse_device_list, parse_lcd_info, CLOUD_BASE_URL, PATH_5LCD_INFO, PATH_FIND_DEVICE,
+    parse_device_list, parse_lcd_info, with_local_token, CLOUD_BASE_URL, PATH_5LCD_INFO,
+    PATH_FIND_DEVICE,
 };
 use crate::models::{DivoomDevice, LcdInfoResponse};
 
@@ -21,12 +24,36 @@ fn client(timeout: Duration) -> Result<reqwest::Client, String> {
         .map_err(|e| format!("Failed to create HTTP client: {}", e))
 }
 
+/// Per-device `LocalToken`, keyed by IP. The frontend owns the persisted copy
+/// (localStorage) and pushes it here via the `set_local_token` command.
+fn local_tokens() -> &'static Mutex<HashMap<String, u32>> {
+    static TOKENS: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+    TOKENS.get_or_init(Default::default)
+}
+
+pub fn set_local_token(ip: &str, token: Option<u32>) {
+    let mut tokens = local_tokens().lock().unwrap_or_else(|e| e.into_inner());
+    match token {
+        Some(token) => tokens.insert(ip.to_string(), token),
+        None => tokens.remove(ip),
+    };
+}
+
+fn local_token(ip: &str) -> Option<u32> {
+    local_tokens()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(ip)
+        .copied()
+}
+
 pub async fn send_command(ip: &str, command: &Value) -> Result<Value, String> {
     send_command_with_timeout(ip, command, DEVICE_TIMEOUT).await
 }
 
-/// Sends one device command. Fails on transport errors, non-2xx status,
-/// a non-JSON body, or a non-zero `error_code`.
+/// Sends one device command, adding the device's `LocalToken` if one is set.
+/// Fails on transport errors, non-2xx status, a non-JSON body, or a non-zero
+/// `error_code`.
 pub async fn send_command_with_timeout(
     ip: &str,
     command: &Value,
@@ -34,7 +61,7 @@ pub async fn send_command_with_timeout(
 ) -> Result<Value, String> {
     let response = client(timeout)?
         .post(device_post_url(ip))
-        .json(command)
+        .json(&with_local_token(command, local_token(ip)))
         .send()
         .await
         .map_err(|e| format!("Failed to send command: {}", e))?;
@@ -120,6 +147,32 @@ pub(crate) mod tests {
 
         let result = send_command(&host(&server), &cmd).await.unwrap();
         assert_eq!(result["Brightness"], 42);
+    }
+
+    #[tokio::test]
+    async fn send_command_adds_local_token_for_that_ip_only() {
+        let device = MockServer::start().await;
+        let other = MockServer::start().await;
+        for server in [&device, &other] {
+            Mock::given(method("POST"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "error_code": 0 })))
+                .mount(server)
+                .await;
+        }
+        let cmd = json!({ "Command": "Channel/GetAllConf" });
+
+        set_local_token(&host(&device), Some(424242));
+        send_command(&host(&device), &cmd).await.unwrap();
+        send_command(&host(&other), &cmd).await.unwrap();
+        set_local_token(&host(&device), None);
+        send_command(&host(&device), &cmd).await.unwrap();
+
+        let body = |r: &wiremock::Request| serde_json::from_slice::<Value>(&r.body).unwrap();
+        let sent = device.received_requests().await.unwrap();
+        assert_eq!(body(&sent[0])["LocalToken"], 424242);
+        assert!(body(&sent[1]).get("LocalToken").is_none(), "token cleared");
+        let sent_other = other.received_requests().await.unwrap();
+        assert!(body(&sent_other[0]).get("LocalToken").is_none(), "other IP");
     }
 
     #[tokio::test]

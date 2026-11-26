@@ -17,10 +17,19 @@ pub async fn get_device_info(ip_address: String) -> Result<DeviceSettings, Strin
         .map_err(|e| format!("Failed to send command: {}", e))?;
 
     if proto::is_token_error(&result) {
-        return Err("Device requires LocalToken to read settings".to_string());
+        return Err(format!(
+            "{}: device needs a valid LocalToken to read settings",
+            proto::TOKEN_REQUIRED_ERROR
+        ));
     }
 
     Ok(proto::parse_device_settings(&result))
+}
+
+/// Sets (or with `None` clears) the `LocalToken` sent to the device at `ip_address`.
+#[tauri::command]
+pub fn set_local_token(ip_address: String, token: Option<u32>) {
+    crate::divoom_api::set_local_token(&ip_address, token);
 }
 
 // The setters below intentionally swallow errors: the UI fires them on every
@@ -151,6 +160,6 @@ mod tests {
             .await;
 
         let err = get_device_info(host(&server)).await.unwrap_err();
-        assert!(err.contains("LocalToken"), "{err}");
+        assert!(err.starts_with(proto::TOKEN_REQUIRED_ERROR), "{err}");
     }
 }

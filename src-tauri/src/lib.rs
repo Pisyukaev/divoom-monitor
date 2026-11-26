@@ -122,6 +122,7 @@ pub fn run() {
             device_commands::set_mirror_mode,
             device_commands::set_24_hours_mode,
             device_commands::reboot_device,
+            device_commands::set_local_token,
             draw_commands::upload_image_from_url,
             draw_commands::upload_image_from_file,
             draw_commands::set_screen_text,

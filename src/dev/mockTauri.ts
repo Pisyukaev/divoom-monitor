@@ -36,6 +36,10 @@ const deviceSettings: Record<string, unknown> = {
   light_switch: 1,
 };
 
+// Like newer Times Gate firmware: settings are only returned with a LocalToken.
+const tokenRequiredIps = new Set(['192.168.1.42']);
+const localTokens = new Map<string, number>();
+
 const lcdClocks = [625, 0, 12, 0, 0];
 let closeToTray = true;
 let autostart = false;
@@ -71,7 +75,14 @@ export function installTauriMock() {
         return devices;
       case 'get_device_info':
         await delay(300);
+        if (tokenRequiredIps.has(args.ipAddress as string) && !localTokens.has(args.ipAddress as string)) {
+          throw 'LOCAL_TOKEN_REQUIRED: device needs a valid LocalToken to read settings';
+        }
         return { ...deviceSettings };
+      case 'set_local_token':
+        if (args.token == null) localTokens.delete(args.ipAddress as string);
+        else localTokens.set(args.ipAddress as string, args.token as number);
+        return null;
       case 'set_brightness':
         deviceSettings.brightness = args.value;
         return null;

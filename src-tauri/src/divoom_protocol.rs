@@ -32,6 +32,21 @@ pub fn device_post_url(ip: &str) -> String {
 /// Reply of newer firmware when the request has no valid `LocalToken`.
 pub const TOKEN_ERROR: &str = "DeviceToken is err";
 
+/// Error returned to the frontend when a read needs a `LocalToken`.
+/// `useDevice.ts` matches on it.
+pub const TOKEN_REQUIRED_ERROR: &str = "LOCAL_TOKEN_REQUIRED";
+
+/// Adds `"LocalToken": token` to a command object. Not in the public docs;
+/// newer Times Gate firmware needs it (field name as in Divoom's own
+/// divoom-pc-monitor). Leaves the command unchanged without a token.
+pub fn with_local_token(command: &Value, token: Option<u32>) -> Value {
+    let mut command = command.clone();
+    if let (Some(token), Some(obj)) = (token, command.as_object_mut()) {
+        obj.insert("LocalToken".to_string(), Value::from(token));
+    }
+    command
+}
+
 /// True when the device complained about a missing/wrong `LocalToken`.
 pub fn is_token_error(response: &Value) -> bool {
     response.get("error_code").and_then(Value::as_str) == Some(TOKEN_ERROR)
@@ -320,6 +335,17 @@ mod tests {
             check_device_response(json!({ "error_code": "Request data illegal json" })).unwrap_err();
         assert!(err.contains("Request data illegal json"), "{err}");
         assert!(check_device_response(json!({ "error_code": "0" })).is_ok());
+    }
+
+    #[test]
+    fn with_local_token_adds_numeric_field() {
+        let cmd = get_all_conf();
+        assert_eq!(
+            with_local_token(&cmd, Some(123456)),
+            json!({ "Command": "Channel/GetAllConf", "LocalToken": 123456 })
+        );
+        assert_eq!(with_local_token(&cmd, None), cmd);
+        assert_eq!(with_local_token(&json!([1]), Some(1)), json!([1]));
     }
 
     #[test]
