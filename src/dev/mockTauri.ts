@@ -56,6 +56,7 @@ function systemMetrics() {
       { name: 'System', mount_point: 'C:\\', total_space: 1000 * gb, available_space: 380 * gb, used_space: 620 * gb, usage_percent: 62 },
       { name: 'Data', mount_point: 'D:\\', total_space: 2000 * gb, available_space: 1500 * gb, used_space: 500 * gb, usage_percent: 25 },
     ],
+    cpu_temperature_issue: null,
   };
 }
 

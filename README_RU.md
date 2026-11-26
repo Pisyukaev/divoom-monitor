@@ -60,7 +60,7 @@
 | Backend | Rust, Tauri 2 |
 | Frontend | Vue 3, TypeScript, Vite |
 | UI | Element Plus |
-| Системные метрики | .NET 6 sidecar (LibreHardwareMonitor) |
+| Системные метрики | .NET 8 sidecar (LibreHardwareMonitor) |
 | CI/CD | GitHub Actions, Tauri Action |
 
 ---
@@ -80,7 +80,7 @@
 - [Node.js](https://nodejs.org/) (LTS)
 - [pnpm](https://pnpm.io/)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [.NET 6 SDK](https://dotnet.microsoft.com/download/dotnet/6.0) (для сборки sidecar на Windows)
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (для сборки sidecar на Windows)
 
 ### Шаги
 
@@ -94,6 +94,10 @@ pnpm install
 
 # Собрать sidecar для мониторинга температур (Windows)
 pnpm build:sidecar
+
+# Необязательно: зарегистрировать sidecar как службу Windows (один раз попросит права
+# администратора), нужно для температуры CPU в режиме разработки
+pnpm sidecar:install
 
 # Запустить в режиме разработки
 pnpm start

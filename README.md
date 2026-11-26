@@ -60,7 +60,7 @@ Automatic detection of Divoom devices on the local network via the official Divo
 | Backend | Rust, Tauri 2 |
 | Frontend | Vue 3, TypeScript, Vite |
 | UI | Element Plus |
-| System Metrics | .NET 6 sidecar (LibreHardwareMonitor) |
+| System Metrics | .NET 8 sidecar (LibreHardwareMonitor) |
 | CI/CD | GitHub Actions, Tauri Action |
 
 ---
@@ -80,7 +80,7 @@ The app supports auto-updates — when a new version is available, you will be n
 - [Node.js](https://nodejs.org/) (LTS)
 - [pnpm](https://pnpm.io/)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [.NET 6 SDK](https://dotnet.microsoft.com/download/dotnet/6.0) (for building the sidecar on Windows)
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (for building the sidecar on Windows)
 
 ### Steps
 
@@ -94,6 +94,10 @@ pnpm install
 
 # Build the temperature monitoring sidecar (Windows)
 pnpm build:sidecar
+
+# Optional: register the sidecar as a Windows service (asks for admin once),
+# needed for CPU temperatures in dev mode
+pnpm sidecar:install
 
 # Run in development mode
 pnpm start

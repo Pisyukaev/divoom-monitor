@@ -96,6 +96,11 @@ export default {
     temperature: 'Temperature',
     used: 'Used',
     gpuHint: 'GPU data is unavailable. Make sure the HardwareMonitorCli service is running.',
+    cpuTempIssue: {
+      not_elevated: 'Requires the HardwareMonitorCli service running as SYSTEM. In development, run pnpm sidecar:install.',
+      no_driver: 'The PawnIO driver is not installed. Reinstall the app or run pnpm sidecar:install.',
+      no_sidecar: 'The HardwareMonitorCli service is not responding, CPU temperature is unavailable.',
+    },
     of: 'of',
     disks: 'Disks',
     disksUnavailable: 'Disk data is unavailable.',

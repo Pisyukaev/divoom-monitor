@@ -276,6 +276,9 @@ onUnmounted(() => {
           <span class="app-muted">{{ t('systemMetrics.temperature') }}</span>
           <strong :class="tempClass(metrics.cpu_temperature)">{{ formatTemperature(metrics.cpu_temperature) }}</strong>
         </div>
+        <p v-if="metrics.cpu_temperature === null && metrics.cpu_temperature_issue" class="app-muted hint">
+          {{ t(`systemMetrics.cpuTempIssue.${metrics.cpu_temperature_issue}`) }}
+        </p>
       </div>
 
       <div class="gauge app-card">

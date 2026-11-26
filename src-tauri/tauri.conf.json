@@ -28,7 +28,8 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "resources": {
-      "sidecar/*": "sidecar/"
+      "sidecar/*": "sidecar/",
+      "redist/*": "redist/"
     },
     "icon": [
       "icons/32x32.png",

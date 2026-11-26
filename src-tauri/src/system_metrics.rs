@@ -33,6 +33,9 @@ pub struct SystemMetrics {
     pub memory_total: u64,
     pub memory_used: u64,
     pub disks: Vec<DiskUsage>,
+    /// Why `cpu_temperature` is missing: "not_elevated" | "no_driver" | "no_sidecar".
+    #[serde(default)]
+    pub cpu_temperature_issue: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,110 +191,100 @@ fn find_sidecar_path() -> Result<PathBuf, String> {
     ))
 }
 
-fn start_sidecar_service() -> Result<(), String> {
+const SIDECAR_ADDR: &str = "127.0.0.1:8765";
+const SIDECAR_SERVICE_NAME: &str = "HardwareMonitorCli";
+// The sidecar opens its port before initialising hardware, but a freshly booted
+// machine (autostart) can still be slow to start the service.
+const SIDECAR_START_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn sidecar_port_open() -> bool {
     use std::net::{SocketAddr, TcpStream};
-    use std::time::Duration as StdDuration;
 
-    let addr: SocketAddr = "127.0.0.1:8765"
-        .parse()
-        .map_err(|_| "Failed to parse socket address")?;
+    let addr: SocketAddr = match SIDECAR_ADDR.parse() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
 
-    // Служба уже запущена Windows Service Manager — просто проверяем доступность
-    if TcpStream::connect_timeout(&addr, StdDuration::from_millis(200)).is_ok() {
-        eprintln!("[Sidecar] Service already running on port 8765");
-        return Ok(());
-    }
+/// True when the sidecar is registered as a Windows service (by the installer or
+/// `pnpm sidecar:install`). The service runs as LocalSystem, which is what lets it
+/// load the PawnIO driver and read CPU temperatures without a UAC prompt.
+#[cfg(target_os = "windows")]
+fn sidecar_service_installed() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-    // Попытка запустить службу через sc (если она зарегистрирована)
+    Command::new("sc")
+        .args(["query", SIDECAR_SERVICE_NAME])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn sidecar_service_installed() -> bool {
+    false
+}
+
+fn spawn_sidecar_child(path: &Path) -> Result<Child, String> {
+    let mut command = Command::new(path);
+    command
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let _ = Command::new("sc")
-            .args(["start", "HardwareMonitorCli"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .and_then(|mut c| c.wait());
+        command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    // Fallback: прямой запуск из sidecar/ (dev-режим без установки)
-    #[cfg(target_os = "windows")]
-    let fallback_started = {
-        match find_sidecar_path() {
-            Ok(path) => {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                match Command::new(&path)
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn()
-                {
-                    Ok(child) => {
-                        if let Ok(mut guard) = SIDECAR_PROCESS.lock() {
-                            *guard = Some(child);
-                        }
-                        true
-                    }
-                    Err(e) => {
-                        eprintln!("[Sidecar] Fallback launch failed: {}", e);
-                        false
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!(
-                    "[Sidecar] Service not found, fallback also unavailable: {}",
-                    e
-                );
-                false
-            }
-        }
-    };
+    command
+        .spawn()
+        .map_err(|e| format!("failed to launch {}: {}", path.display(), e))
+}
 
-    #[cfg(not(target_os = "windows"))]
-    let fallback_started = match find_sidecar_path() {
-        Ok(path) => match Command::new(&path)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-        {
-            Ok(child) => {
-                if let Ok(mut guard) = SIDECAR_PROCESS.lock() {
-                    *guard = Some(child);
-                }
-                true
-            }
-            Err(e) => {
-                eprintln!("[Sidecar] Fallback launch failed: {}", e);
-                false
-            }
-        },
-        Err(e) => {
-            eprintln!("[Sidecar] {}", e);
-            false
-        }
-    };
+fn start_sidecar_service() -> Result<(), String> {
+    if sidecar_port_open() {
+        eprintln!("[Sidecar] Already running on {}", SIDECAR_ADDR);
+        return Ok(());
+    }
 
-    if !fallback_started {
-        return Err(
-            "HardwareMonitorCli service is not running. Install the app to register it as a service.".to_string()
+    if sidecar_service_installed() {
+        // The service is auto-start with restart-on-failure; an unelevated app cannot
+        // start it anyway, so just wait for it.
+        eprintln!("[Sidecar] Waiting for the {} service...", SIDECAR_SERVICE_NAME);
+    } else {
+        let path = find_sidecar_path()?;
+        let child = spawn_sidecar_child(&path)?;
+        if let Ok(mut guard) = SIDECAR_PROCESS.lock() {
+            *guard = Some(child);
+        }
+        eprintln!(
+            "[Sidecar] Service not installed; started {} as a child process without admin rights. \
+             CPU temperature will be unavailable — run `pnpm sidecar:install` to register the service.",
+            path.display()
         );
     }
 
-    // Ждём пока сервис поднимется (до 5 сек)
-    for i in 0..10 {
-        std::thread::sleep(Duration::from_millis(500));
-        if TcpStream::connect_timeout(&addr, StdDuration::from_millis(200)).is_ok() {
-            eprintln!("[Sidecar] Started after {}ms", (i + 1) * 500);
+    let started = std::time::Instant::now();
+    while started.elapsed() < SIDECAR_START_TIMEOUT {
+        if sidecar_port_open() {
+            eprintln!("[Sidecar] Ready after {} ms", started.elapsed().as_millis());
             return Ok(());
         }
+        std::thread::sleep(Duration::from_millis(250));
     }
 
-    Err("Sidecar did not respond on port 8765 within 5 seconds".to_string())
+    Err(format!(
+        "Sidecar did not respond on {} within {} s",
+        SIDECAR_ADDR,
+        SIDECAR_START_TIMEOUT.as_secs()
+    ))
 }
 
 #[cfg(target_os = "windows")]
@@ -461,65 +454,22 @@ pub async fn get_system_metrics() -> Result<SystemMetrics, String> {
         memory_total: system.total_memory(),
         memory_used: system.used_memory(),
         disks,
+        cpu_temperature_issue: if cfg!(target_os = "windows") && cpu_temperature.is_none() {
+            Some("no_sidecar".to_string())
+        } else {
+            None
+        },
     })
 }
 
+/// Stops the sidecar only if this app launched it as a child process.
+/// The Windows service is shared and keeps running after the app exits.
 pub fn stop_sidecar_service() {
-    eprintln!("[Sidecar] Stopping service...");
-
-    // Try graceful HTTP shutdown first (works regardless of privilege level)
-    let shutdown_ok = std::panic::catch_unwind(|| {
-        use std::io::{Read, Write};
-        use std::net::{SocketAddr, TcpStream};
-        use std::time::Duration as StdDuration;
-
-        let addr: SocketAddr = match "127.0.0.1:8765".parse() {
-            Ok(a) => a,
-            Err(_) => return false,
-        };
-        let mut stream = match TcpStream::connect_timeout(&addr, StdDuration::from_millis(500)) {
-            Ok(s) => s,
-            Err(_) => return false,
-        };
-        let _ = stream.set_read_timeout(Some(StdDuration::from_secs(2)));
-        let _ = stream.set_write_timeout(Some(StdDuration::from_secs(2)));
-
-        let request = "GET /shutdown HTTP/1.1\r\nHost: localhost:8765\r\nConnection: close\r\n\r\n";
-        if stream.write_all(request.as_bytes()).is_err() {
-            return false;
-        }
-
-        let mut buf = [0u8; 256];
-        let _ = stream.read(&mut buf);
-        eprintln!("[Sidecar] Graceful shutdown request sent");
-        true
-    })
-    .unwrap_or(false);
-
-    // Kill the child handle if we have one (non-elevated launch)
     if let Ok(mut guard) = SIDECAR_PROCESS.lock() {
         if let Some(mut child) = guard.take() {
             let _ = child.kill();
-            eprintln!("[Sidecar] Child process killed");
-            return;
-        }
-    }
-
-    // If HTTP shutdown didn't work, force-kill by process name (Windows)
-    if !shutdown_ok {
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-            let _ = Command::new("taskkill")
-                .args(["/F", "/IM", "HardwareMonitorCli.exe"])
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .and_then(|mut c| c.wait());
-            eprintln!("[Sidecar] Force-killed via taskkill");
+            let _ = child.wait();
+            eprintln!("[Sidecar] Child process stopped");
         }
     }
 }

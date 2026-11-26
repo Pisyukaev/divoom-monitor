@@ -15,6 +15,8 @@ export interface SystemMetrics {
   memory_total: number;
   memory_used: number;
   disks: DiskUsage[];
+  /** Why cpu_temperature is null (see the sidecar). */
+  cpu_temperature_issue?: 'not_elevated' | 'no_driver' | 'no_sidecar' | null;
 }
 
 export interface LcdInfo {
