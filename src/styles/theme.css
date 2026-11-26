@@ -1,0 +1,234 @@
+/*
+ * App-wide design tokens layered on top of Element Plus.
+ * Element Plus reads --el-* variables, so overriding them here restyles every component.
+ * `html.dark` is toggled by useTheme().
+ */
+
+:root {
+  --app-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --app-font-mono: 'Cascadia Mono', Consolas, 'SFMono-Regular', Menlo, monospace;
+
+  --app-radius-sm: 8px;
+  --app-radius: 12px;
+  --app-radius-lg: 16px;
+
+  --app-sidebar-width: 248px;
+  --app-content-max: 1120px;
+
+  /* Accent: indigo */
+  --el-color-primary: #5b5bd6;
+  --el-color-primary-light-3: #8c8ce2;
+  --el-color-primary-light-5: #adadeb;
+  --el-color-primary-light-7: #cecef3;
+  --el-color-primary-light-8: #dedef7;
+  --el-color-primary-light-9: #efeffb;
+  --el-color-primary-dark-2: #4949ab;
+
+  --el-bg-color-page: #f4f5f8;
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+  --el-border-color: #e3e5ec;
+  --el-border-color-light: #eceef3;
+  --el-border-color-lighter: #f0f1f5;
+  --el-fill-color-light: #f4f5f8;
+  --el-fill-color-lighter: #f8f9fb;
+
+  --el-border-radius-base: var(--app-radius-sm);
+  --el-border-radius-small: 6px;
+  --el-font-family: var(--app-font);
+  --el-box-shadow-light: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+
+  --app-sidebar-bg: #fbfbfd;
+  --app-surface: var(--el-bg-color);
+  --app-surface-muted: #f8f9fb;
+  --app-hover: rgba(91, 91, 214, 0.06);
+  --app-active: rgba(91, 91, 214, 0.1);
+  --app-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
+  --app-success: #16a34a;
+  --app-warning: #d97706;
+  --app-danger: #dc2626;
+  --app-screen-bezel: #0b0c0f;
+
+  color-scheme: light;
+}
+
+html.dark {
+  --el-color-primary: #7c7cf0;
+  --el-color-primary-light-3: #5f5fb8;
+  --el-color-primary-light-5: #4a4a8c;
+  --el-color-primary-light-7: #363660;
+  --el-color-primary-light-8: #2c2c4b;
+  --el-color-primary-light-9: #222236;
+  --el-color-primary-dark-2: #9a9af4;
+
+  --el-bg-color-page: #0f1115;
+  --el-bg-color: #171a20;
+  --el-bg-color-overlay: #1e2129;
+  --el-border-color: #2b2f39;
+  --el-border-color-light: #262a33;
+  --el-border-color-lighter: #22252d;
+  --el-fill-color-light: #1e2129;
+  --el-fill-color-lighter: #1a1d24;
+  --el-box-shadow-light: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --app-sidebar-bg: #13151a;
+  --app-surface-muted: #1b1e25;
+  --app-hover: rgba(124, 124, 240, 0.08);
+  --app-active: rgba(124, 124, 240, 0.16);
+  --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --app-success: #22c55e;
+  --app-warning: #f59e0b;
+  --app-danger: #ef4444;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--app-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- Shared building blocks ---------- */
+
+.app-page {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.app-page-title {
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.app-page-subtitle {
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+}
+
+.app-card {
+  background: var(--app-surface);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+}
+
+.app-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 0;
+}
+
+.app-card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app-card-body {
+  padding: 16px 20px 20px;
+}
+
+.app-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--el-text-color-secondary);
+}
+
+.app-muted {
+  color: var(--el-text-color-secondary);
+}
+
+.app-mono {
+  font-family: var(--app-font-mono);
+  font-size: 12.5px;
+}
+
+.app-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--el-text-color-placeholder);
+}
+
+.app-status-dot.is-online {
+  background: var(--app-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-success) 20%, transparent);
+}
+
+/* ---------- Element Plus touch-ups ---------- */
+
+.el-button {
+  font-weight: 500;
+}
+
+.el-message {
+  border-radius: var(--app-radius-sm);
+}
+
+@media (max-width: 860px) {
+  .app-page {
+    padding: 20px 16px 32px;
+  }
+}

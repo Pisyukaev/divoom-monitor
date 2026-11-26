@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vite-browser",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "pnpm@10", "dev"],
+      "port": 1420
+    }
+  ]
+}

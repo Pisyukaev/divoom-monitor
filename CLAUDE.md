@@ -20,6 +20,8 @@ pnpm tauri build        # full installer; beforeBuildCommand runs build:sidecar 
 cargo check --manifest-path src-tauri/Cargo.toml   # fast Rust check
 ```
 
+UI-only work doesn't need Rust: `pnpm dev` serves the frontend at http://localhost:1420, and outside Tauri `src/dev/mockTauri.ts` mocks every `invoke` (fake devices, settings, metrics). The mock is loaded only when `import.meta.env.DEV` and is not part of production builds. When you add a Tauri command, add a case to that mock too.
+
 `pnpm tauri build` always rebuilds the sidecar, so it needs the .NET SDK even if you only changed frontend code. Without the sidecar the app still runs; it falls back to `sysinfo`/WMI/NVML and temperatures may be missing.
 
 Releases: pushing to the `release` branch (or manual dispatch) runs `.github/workflows/release.yml` on `windows-latest`, which creates a **draft** GitHub release via tauri-action, signed with `TAURI_SIGNING_PRIVATE_KEY`. The version must be bumped in three places that are kept in sync: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`. The in-app updater reads `releases/latest/download/latest.json`.
@@ -52,7 +54,8 @@ Tauri converts Rust `snake_case` args to camelCase on the JS side (`ip_address` 
 
 ### Frontend state and startup
 
-- Routes: `/` device list, `/settings` app settings, `/device/:id/{common,display,system}`. `:id` is `encodeURIComponent(ip || mac || name)` (see `useDevice.ts`, duplicated in `useAutoSendConfig.ts`).
+- Layout: `App.vue` is a shell with a persistent `AppSidebar` (device list and settings) and a `<RouterView>`. The discovered device list is module-level shared state in `composables/useDevices.ts` and is scanned once per session. Design tokens and shared classes (`.app-page`, `.app-card`, ...) live in `src/styles/theme.css`, which overrides Element Plus `--el-*` variables for light and `html.dark`.
+- Routes: `/` home (device cards), `/settings` app settings, `/device/:id/{common,display,system}` (control, Times Gate screens, PC Monitor). The `display` tab is hidden for devices other than Times Gate. `:id` is `encodeURIComponent(ip || mac || name)` (`getDeviceRouteId` in `useDevices.ts`, duplicated in `useAutoSendConfig.ts`); `utils/device.ts#parseDeviceIp` gets the IP back.
 - localStorage keys: `screen_configs_<deviceId>` (Times Gate screen editor, `ScreenManager.vue`), `pc_monitor_<ip>` (PC Monitor settings), plus theme, `app_locale`, `sidebarWidth`.
 - On app mount, `App.vue` calls `startPcMonitorForAllDevices()` (re-activates ClockId 625 with retries, then pushes metrics every 2 s from a `setInterval` in the webview) and `sendConfigsToAllDevices()` (re-scans and re-sends saved screen configs). Both loops live in the webview, so they only run while the webview is alive (including when hidden to tray).
 - The only setting persisted on the Rust side is `close_to_tray` (`app_settings.rs`, written to `<app_data_dir>/settings.json`), because the window-close handler needs it before JS runs. Autostart passes `--minimized`, which hides the window at launch.

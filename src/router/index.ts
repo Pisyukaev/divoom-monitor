@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import DeviceList from '../components/device-list/list.vue';
+import HomeView from '../views/HomeView.vue';
 import AppSettingsView from '../views/AppSettingsView.vue';
 import DeviceSettingsView from '../views/DeviceSettingsView.vue';
 import CommonSettingsView from '../views/CommonSettingsView.vue';
@@ -11,8 +11,8 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'DeviceList',
-      component: DeviceList,
+      name: 'Home',
+      component: HomeView,
     },
     {
       path: '/settings',
@@ -34,19 +34,16 @@ const router = createRouter({
           path: 'common',
           name: 'CommonSettings',
           component: CommonSettingsView,
-          props: true,
         },
         {
           path: 'display',
           name: 'DisplaySettings',
           component: DisplaySettingsView,
-          props: true,
         },
         {
           path: 'system',
           name: 'SystemMetrics',
           component: SystemMetricsView,
-          props: true,
         },
       ],
     },

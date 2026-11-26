@@ -9,6 +9,8 @@ const props = defineProps<{
   config: ScreenConfig;
   scale?: number;
   selectedText?: TextElement | null;
+  /** Read-only thumbnail: no grid, no delete handles, no frame. */
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -257,15 +259,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="previewRef" class="screen-preview" :style="{
+  <div ref="previewRef" class="screen-preview" :class="{ compact }" :style="{
     width: `${previewSize}px`,
     height: `${previewSize}px`,
   }">
     <div class="preview-background" @click="emit('text-click', null)">
-      <div class="grid-overlay"></div>
+      <div v-if="!compact" class="grid-overlay"></div>
       <img v-if="imageUrl" :src="imageUrl" alt="Screen preview" class="preview-image" />
       <div v-else class="empty-background">
-        <span>128×128</span>
+        <span v-if="!compact">128 × 128</span>
       </div>
     </div>
 
@@ -273,7 +275,7 @@ onUnmounted(() => {
       'text-element-selected': props.selectedText?.id === text.id,
       'text-element-scrolling': shouldAnimateText(text)
     }" :style="getTextElementStyle(text)" @mousedown="handleTextMouseDown($event, text)">
-      <el-icon class="delete-icon" @click="handleDeleteText($event, text.id)" size="24">
+      <el-icon v-if="!compact" class="delete-icon" @click="handleDeleteText($event, text.id)" size="24">
         <CircleCloseFilled />
       </el-icon>
       <div class="text-wrapper"
@@ -295,18 +297,25 @@ onUnmounted(() => {
 <style scoped>
 .screen-preview {
   position: relative;
-  border: 2px solid var(--el-border-color);
-  border-radius: 8px;
-  background-color: var(--el-bg-color-page);
+  border-radius: 14px;
+  background-color: #000;
   overflow: hidden;
   user-select: none;
+  box-shadow: 0 0 0 6px var(--app-screen-bezel), 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.screen-preview.compact {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .preview-background {
   position: absolute;
   width: 100%;
   height: 100%;
-  background-color: #000;
+  background-color: #111216;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.3px);
+  background-size: 8px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -327,6 +336,7 @@ onUnmounted(() => {
 .preview-image {
   width: 100%;
   height: 100%;
+  object-fit: cover;
   position: relative;
   z-index: 1;
 }

@@ -2,7 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { Refresh, Upload, Connection } from '@element-plus/icons-vue';
+import { Refresh, Connection, Promotion } from '@element-plus/icons-vue';
+import SettingRow from '../components/ui/SettingRow.vue';
 import { ElMessage } from 'element-plus';
 
 import { getSystemMetrics, getLcdInfo, activatePcMonitor } from '../api/system';
@@ -96,7 +97,18 @@ const formatTemperature = (value: number | null) => {
   return `${value.toFixed(1)} °C`;
 };
 
-const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+const gaugeColor = (value: number) =>
+  value >= 85 ? 'var(--app-danger)' : value >= 65 ? 'var(--app-warning)' : 'var(--el-color-primary)';
+
+const tempClass = (value: number | null) =>
+  value === null ? '' : value >= 85 ? 'is-hot' : value >= 70 ? 'is-warm' : '';
+
+const screenButtons = computed(() =>
+  screenOptions.value.map((opt, i) => ({
+    index: opt.value,
+    isPcMonitor: currentIndependence.value?.lcd_list[i]?.lcd_clock_id === 625,
+  })),
+);
 
 const loadMetrics = async () => {
   isLoading.value = true;
@@ -194,313 +206,322 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="metrics-page">
-    <div class="metrics-header">
-      <div>
-        <h2>{{ t('systemMetrics.title') }}</h2>
-        <p class="subtitle">{{ t('systemMetrics.subtitle') }}</p>
+  <div class="monitor">
+    <section v-if="deviceIp" v-loading="isLoadingLcd" class="app-card">
+      <div class="app-card-header">
+        <div class="title-row">
+          <span class="app-card-title">{{ t('systemMetrics.sendToDevice') }}</span>
+          <span class="status-pill" :class="{ active: autoSendEnabled }">
+            <span class="app-status-dot" :class="{ 'is-online': autoSendEnabled }" />
+            {{ autoSendEnabled ? t('systemMetrics.statusSending') : t('systemMetrics.statusIdle') }}
+          </span>
+        </div>
+        <el-tooltip :content="t('systemMetrics.refreshScreens')" placement="top">
+          <el-button :icon="Refresh" text circle :loading="isLoadingLcd" @click="loadLcdInfo" />
+        </el-tooltip>
       </div>
-      <div class="header-actions">
-        <span v-if="lastUpdated" class="timestamp">
-          {{ t('systemMetrics.updated', { time: lastUpdated.toLocaleTimeString() }) }}
-        </span>
-        <el-button :icon="Refresh" :loading="isLoading" @click="loadMetrics">
-          {{ t('systemMetrics.refresh') }}
-        </el-button>
+
+      <div class="app-card-body">
+        <el-alert v-if="lcdError" type="warning" :title="lcdError" show-icon :closable="false" class="lcd-alert" />
+
+        <div class="screen-picker-label app-section-label">{{ t('systemMetrics.screen') }}</div>
+        <div class="screen-picker">
+          <button v-for="btn in screenButtons" :key="btn.index" class="screen-btn"
+            :class="{ selected: selectedScreen === btn.index }" :disabled="autoSendEnabled"
+            @click="selectedScreen = btn.index">
+            <span class="screen-num">{{ btn.index + 1 }}</span>
+            <span v-if="btn.isPcMonitor" class="screen-badge">PC</span>
+          </button>
+        </div>
+
+        <SettingRow :icon="Connection" :title="t('systemMetrics.pcMonitorMode')"
+          :description="t('systemMetrics.pcMonitorModeDesc')">
+          <el-tag v-if="isSelectedScreenPcMonitor" type="success" effect="light" round>
+            {{ t('systemMetrics.alreadyActivated') }}
+          </el-tag>
+          <el-button v-else type="primary" plain :loading="isActivating" @click="handleActivate">
+            {{ t('systemMetrics.activate') }}
+          </el-button>
+        </SettingRow>
+
+        <SettingRow :icon="Promotion" :title="t('systemMetrics.autoSendMetrics')"
+          :description="t('systemMetrics.metricsSending')">
+          <el-switch v-model="autoSendEnabled" />
+        </SettingRow>
+
+        <el-alert v-if="sendError" type="error" :title="sendError" show-icon :closable="true"
+          @close="sendError = null" />
       </div>
+    </section>
+
+    <div class="section-head">
+      <span class="app-section-label">{{ t('systemMetrics.title') }}</span>
+      <span v-if="lastUpdated" class="app-muted timestamp">
+        {{ t('systemMetrics.updated', { time: lastUpdated.toLocaleTimeString() }) }}
+      </span>
     </div>
 
     <el-alert v-if="error" type="error" :title="error" show-icon :closable="false" />
 
-    <div v-if="metrics" class="metrics-grid">
-      <el-card class="metric-card">
-        <template #header>
-          <span>{{ t('systemMetrics.cpu') }}</span>
-        </template>
-        <div class="metric-value">
-          <span class="value">{{ formatPercent(metrics.cpu_usage) }}</span>
-          <span class="label">{{ t('systemMetrics.load') }}</span>
+    <div v-if="metrics" class="gauges">
+      <div class="gauge app-card">
+        <el-progress type="dashboard" :percentage="Math.round(metrics.cpu_usage)" :width="128" :stroke-width="10"
+          :color="gaugeColor(metrics.cpu_usage)">
+          <template #default="{ percentage }">
+            <span class="gauge-value">{{ percentage }}<small>%</small></span>
+            <span class="gauge-label">{{ t('systemMetrics.cpu') }}</span>
+          </template>
+        </el-progress>
+        <div class="gauge-foot">
+          <span class="app-muted">{{ t('systemMetrics.temperature') }}</span>
+          <strong :class="tempClass(metrics.cpu_temperature)">{{ formatTemperature(metrics.cpu_temperature) }}</strong>
         </div>
-        <el-progress :percentage="metrics.cpu_usage" :stroke-width="10" :format="formatPercent" />
-        <div class="metric-footer">
-          <span>{{ t('systemMetrics.temperature') }}</span>
-          <strong>{{ formatTemperature(metrics.cpu_temperature) }}</strong>
-        </div>
-      </el-card>
+      </div>
 
-      <el-card class="metric-card">
-        <template #header>
-          <span>{{ t('systemMetrics.gpu') }}</span>
-        </template>
-        <div class="metric-value">
-          <span class="value">{{ metrics.gpu_usage !== null ? formatPercent(metrics.gpu_usage) : '—' }}</span>
-          <span class="label">{{ t('systemMetrics.load') }}</span>
+      <div class="gauge app-card">
+        <el-progress type="dashboard" :percentage="Math.round(metrics.gpu_usage ?? 0)" :width="128" :stroke-width="10"
+          :color="gaugeColor(metrics.gpu_usage ?? 0)">
+          <template #default>
+            <span class="gauge-value">
+              <template v-if="metrics.gpu_usage !== null">{{ Math.round(metrics.gpu_usage) }}<small>%</small></template>
+              <template v-else>—</template>
+            </span>
+            <span class="gauge-label">{{ t('systemMetrics.gpu') }}</span>
+          </template>
+        </el-progress>
+        <div class="gauge-foot">
+          <span class="app-muted">{{ t('systemMetrics.temperature') }}</span>
+          <strong :class="tempClass(metrics.gpu_temperature)">{{ formatTemperature(metrics.gpu_temperature) }}</strong>
         </div>
-        <el-progress v-if="metrics.gpu_usage !== null" :percentage="metrics.gpu_usage" :stroke-width="10"
-          :format="formatPercent" />
-        <div class="metric-footer">
-          <span>{{ t('systemMetrics.temperature') }}</span>
-          <strong>{{ formatTemperature(metrics.gpu_temperature) }}</strong>
-        </div>
-        <p v-if="metrics.gpu_usage === null && metrics.gpu_temperature === null" class="hint">{{
-          t('systemMetrics.gpuHint') }}
+        <p v-if="metrics.gpu_usage === null && metrics.gpu_temperature === null" class="app-muted hint">
+          {{ t('systemMetrics.gpuHint') }}
         </p>
-      </el-card>
+      </div>
 
-      <el-card class="metric-card">
-        <template #header>
-          <span>{{ t('systemMetrics.ram') }}</span>
-        </template>
-        <div class="metric-value">
-          <span class="value">{{ formatPercent(memoryUsagePercent) }}</span>
-          <span class="label">{{ t('systemMetrics.usage') }}</span>
+      <div class="gauge app-card">
+        <el-progress type="dashboard" :percentage="Math.round(memoryUsagePercent)" :width="128" :stroke-width="10"
+          :color="gaugeColor(memoryUsagePercent)">
+          <template #default="{ percentage }">
+            <span class="gauge-value">{{ percentage }}<small>%</small></span>
+            <span class="gauge-label">{{ t('systemMetrics.ram') }}</span>
+          </template>
+        </el-progress>
+        <div class="gauge-foot">
+          <span class="app-muted">{{ t('systemMetrics.used') }}</span>
+          <strong>{{ formatBytes(metrics.memory_used) }} / {{ formatBytes(metrics.memory_total) }}</strong>
         </div>
-        <el-progress :percentage="memoryUsagePercent" :stroke-width="10" status="success" :format="formatPercent" />
-        <div class="metric-footer">
-          <span>{{ formatBytes(metrics.memory_used) }}</span>
-          <span>{{ t('systemMetrics.of') }} {{ formatBytes(metrics.memory_total) }}</span>
-        </div>
-      </el-card>
+      </div>
     </div>
 
-    <el-card v-if="metrics" class="disk-card">
-      <template #header>
-        <span>{{ t('systemMetrics.disks') }}</span>
-      </template>
-      <div v-if="disks.length === 0" class="empty-state">{{ t('systemMetrics.disksUnavailable') }}</div>
-      <div v-else class="disk-list">
-        <div v-for="disk in disks" :key="`${disk.name}-${disk.mount_point}`" class="disk-item">
-          <strong>{{ disk.name || t('systemMetrics.disk') }}</strong>
-          <el-progress :percentage="disk.usage_percent" :stroke-width="8" :format="formatPercent" />
-          <div class="disk-info">
-            <div class="metric-footer">
-              <span>{{ formatBytes(disk.used_space) }} {{ t('systemMetrics.of') }} {{ formatBytes(disk.total_space)
-              }}</span>
+    <section v-if="metrics" class="app-card">
+      <div class="app-card-header">
+        <span class="app-card-title">{{ t('systemMetrics.disks') }}</span>
+      </div>
+      <div class="app-card-body">
+        <div v-if="disks.length === 0" class="app-muted">{{ t('systemMetrics.disksUnavailable') }}</div>
+        <div v-else class="disk-list">
+          <div v-for="disk in disks" :key="`${disk.name}-${disk.mount_point}`" class="disk">
+            <div class="disk-head">
+              <strong>{{ disk.name || t('systemMetrics.disk') }}</strong>
+              <span class="app-mono app-muted">{{ disk.mount_point }}</span>
+              <span class="disk-size app-muted">
+                {{ formatBytes(disk.used_space) }} {{ t('systemMetrics.of') }} {{ formatBytes(disk.total_space) }}
+              </span>
             </div>
+            <el-progress :percentage="Math.round(disk.usage_percent)" :stroke-width="8"
+              :color="gaugeColor(disk.usage_percent)" />
           </div>
         </div>
       </div>
-    </el-card>
-
-    <el-card v-if="deviceIp" class="device-send-card" v-loading="isLoadingLcd">
-      <template #header>
-        <div class="send-header">
-          <span>{{ t('systemMetrics.sendToDevice') }}</span>
-          <el-button :icon="Refresh" size="small" circle @click="loadLcdInfo" :loading="isLoadingLcd" />
-        </div>
-      </template>
-
-      <el-alert v-if="lcdError" type="warning" :title="lcdError" show-icon :closable="false"
-        style="margin-bottom: 16px" />
-
-      <div class="send-controls">
-        <div class="send-row">
-          <label class="send-label">{{ t('systemMetrics.screen') }}</label>
-          <el-select v-model="selectedScreen" style="width: 260px" :disabled="autoSendEnabled">
-            <el-option v-for="opt in screenOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-          </el-select>
-        </div>
-
-        <div class="send-row">
-          <label class="send-label">{{ t('systemMetrics.pcMonitorMode') }}</label>
-          <div class="send-actions">
-            <el-button type="primary" :icon="Connection" :loading="isActivating" :disabled="isSelectedScreenPcMonitor"
-              @click="handleActivate">
-              {{ isSelectedScreenPcMonitor ? t('systemMetrics.alreadyActivated') : t('systemMetrics.activate') }}
-            </el-button>
-            <el-tag v-if="isSelectedScreenPcMonitor" type="success" size="small">Clock 625</el-tag>
-          </div>
-        </div>
-
-        <div class="send-row">
-          <label class="send-label">{{ t('systemMetrics.autoSendMetrics') }}</label>
-          <el-switch v-model="autoSendEnabled" :active-text="t('systemMetrics.on')"
-            :inactive-text="t('systemMetrics.off')" />
-        </div>
-
-        <el-alert v-if="sendError" type="error" :title="sendError" show-icon :closable="true" @close="sendError = null"
-          style="margin-top: 8px" />
-
-        <div v-if="autoSendEnabled" class="send-status">
-          <el-icon color="var(--el-color-success)">
-            <Upload />
-          </el-icon>
-          <span>{{ t('systemMetrics.metricsSending') }}</span>
-        </div>
-
-      </div>
-    </el-card>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.metrics-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+.monitor {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.metrics-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.metrics-header h2 {
-  margin: 0;
-  font-size: 28px;
-  color: var(--el-text-color-primary);
-}
-
-.subtitle {
-  margin: 4px 0 0;
-  color: var(--el-text-color-secondary);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
   gap: 16px;
 }
 
-.timestamp {
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
-}
-
-.metric-card {
+.title-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
-.metric-value {
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+}
+
+.status-pill.active {
+  background: color-mix(in srgb, var(--app-success) 14%, transparent);
+  color: var(--app-success);
+}
+
+.lcd-alert {
+  margin-bottom: 12px;
+}
+
+.screen-picker-label {
+  margin-bottom: 8px;
+}
+
+.screen-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0 8px;
+}
+
+.screen-btn {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1.5px solid var(--el-border-color);
+  background: var(--app-surface-muted);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.screen-btn:hover:not(:disabled) {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.screen-btn.selected {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.screen-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.screen-num {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.screen-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  background: var(--app-success);
+  color: #fff;
+}
+
+.section-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
-.metric-value .value {
-  font-size: 32px;
-  font-weight: 600;
+.timestamp {
+  font-size: 12.5px;
+}
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+}
+
+.gauge :deep(.el-progress__text) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gauge-value {
+  font-size: 26px;
+  font-weight: 650;
   color: var(--el-text-color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-.metric-value .label {
+.gauge-value small {
+  font-size: 14px;
+  font-weight: 500;
+  margin-left: 1px;
+}
+
+.gauge-label {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--el-text-color-secondary);
 }
 
-.metric-footer {
+.gauge-foot {
+  align-self: stretch;
   display: flex;
   justify-content: space-between;
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-warm {
+  color: var(--app-warning);
+}
+
+.is-hot {
+  color: var(--app-danger);
 }
 
 .hint {
   margin: 0;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-}
-
-.disk-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  font-size: 12px;
+  text-align: center;
 }
 
 .disk-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
-.disk-item {
+.disk-head {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.disk-info {
-  display: flex;
-  justify-content: end;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.empty-state {
-  color: var(--el-text-color-secondary);
-}
-
-.device-send-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.send-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.send-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.send-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.send-label {
-  min-width: 180px;
-  font-size: 14px;
-  color: var(--el-text-color-primary);
-  font-weight: 500;
-}
-
-.send-actions {
-  display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
+  margin-bottom: 6px;
 }
 
-.send-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background-color: var(--el-fill-color-light);
-  border-radius: 6px;
+.disk-size {
+  margin-left: auto;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-
-@media (max-width: 768px) {
-  .send-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .send-label {
-    min-width: auto;
-  }
+  font-variant-numeric: tabular-nums;
 }
 </style>

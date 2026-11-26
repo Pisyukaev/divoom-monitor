@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "divoom-monitor",
+        "title": "Divoom Monitor",
         "width": 1280,
-        "height": 960
+        "height": 900,
+        "minWidth": 820,
+        "minHeight": 600
       }
     ],
     "security": {
