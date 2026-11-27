@@ -114,13 +114,16 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement) {
 function drawText(ctx: CanvasRenderingContext2D, text: TextElement) {
   if (!text.content) return;
   const live = isLiveText(text);
+  let content = text.content;
   ctx.save();
   ctx.beginPath();
   ctx.rect(text.x, text.y, text.textWidth, textBoxHeight(text));
   ctx.clip(); // text wider than its area is cut off
   if (live) {
-    const size = DEVICE_FONTS.find((f) => f.value === deviceFont(text.deviceFont))?.previewSize ?? 10;
-    ctx.font = `bold ${size}px Verdana, sans-serif`;
+    const font = DEVICE_FONTS.find((f) => f.value === deviceFont(text.deviceFont));
+    ctx.font = `bold ${font?.previewSize ?? 10}px Verdana, sans-serif`;
+    content = fillSamples(content);
+    if (font?.chars) content = [...content].filter((c) => font.chars!.includes(c)).join('');
   } else {
     ctx.font = `${textSize(text)}px ${textFontFamily(text.font)}`;
   }
@@ -129,7 +132,7 @@ function drawText(ctx: CanvasRenderingContext2D, text: TextElement) {
   const align = textAlignment(text.alignment);
   ctx.textAlign = align === 2 ? 'center' : align === 3 ? 'right' : 'left';
   const x = align === 2 ? text.x + text.textWidth / 2 : align === 3 ? text.x + text.textWidth : text.x;
-  ctx.fillText(live ? fillSamples(text.content) : text.content, x, text.y);
+  ctx.fillText(content, x, text.y);
   ctx.restore();
 }
 
