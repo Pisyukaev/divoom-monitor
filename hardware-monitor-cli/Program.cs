@@ -31,10 +31,12 @@ public class HardwareMonitorService : BackgroundService
         };
     }
 
+    private volatile bool _computerReady;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _computer.Open();
-
+        // Open the port first so the app sees the sidecar right away; opening the
+        // hardware (driver, SMBus, storage) can take several seconds.
         _listener = new HttpListener();
         _listener.Prefixes.Add("http://localhost:8765/");
 
@@ -48,6 +50,14 @@ public class HardwareMonitorService : BackgroundService
             Console.Error.WriteLine($"Failed to start HTTP server: {ex.Message}");
             return;
         }
+
+        _ = Task.Run(() =>
+        {
+            _computer.Open();
+            _computerReady = true;
+            Console.Error.WriteLine(
+                $"Hardware opened. Elevated: {Environment.IsPrivilegedProcess}, PawnIO installed: {LibreHardwareMonitor.PawnIo.PawnIo.IsInstalled}");
+        }, stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -74,16 +84,10 @@ public class HardwareMonitorService : BackgroundService
 
         try
         {
-            if (request.Url?.AbsolutePath == "/shutdown")
+            if (!_computerReady)
             {
-                Console.Error.WriteLine("Shutdown request received");
-                var shutdownMsg = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
-                response.ContentType = "application/json";
-                response.ContentLength64 = shutdownMsg.Length;
-                response.StatusCode = 200;
-                await response.OutputStream.WriteAsync(shutdownMsg, 0, shutdownMsg.Length, stoppingToken);
+                response.StatusCode = 503;
                 response.OutputStream.Close();
-                // Graceful stop через StopAsync — не нужен принудительный выход
                 return;
             }
 
@@ -232,7 +236,13 @@ public class HardwareMonitorService : BackgroundService
             GpuTemperature = gpuTemp,
             MemoryTotal = memTotal,
             MemoryUsed = memUsed,
-            Disks = disks
+            Disks = disks,
+            // Explains a missing CPU temperature to the UI: the driver (PawnIO) needs a
+            // privileged process and must be installed system-wide.
+            CpuTemperatureIssue = cpuTemp.HasValue ? null
+                : !Environment.IsPrivilegedProcess ? "not_elevated"
+                : !LibreHardwareMonitor.PawnIo.PawnIo.IsInstalled ? "no_driver"
+                : null
         };
     }
 
@@ -266,6 +276,7 @@ class SystemMetrics
     [JsonPropertyName("memory_total")] public ulong MemoryTotal { get; set; }
     [JsonPropertyName("memory_used")] public ulong MemoryUsed { get; set; }
     [JsonPropertyName("disks")] public List<DiskUsage> Disks { get; set; } = new();
+    [JsonPropertyName("cpu_temperature_issue")] public string? CpuTemperatureIssue { get; set; }
 }
 
 [StructLayout(LayoutKind.Sequential)]

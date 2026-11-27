@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Divoom Monitor is a Tauri 2 desktop app (Rust backend + Vue 3/TypeScript/Element Plus frontend) for controlling Divoom devices over the local network: device settings, per-screen image/text editing, and a "PC Monitor" mode that streams CPU/GPU/RAM/disk metrics to the device. On Windows, temperatures come from a separate .NET 6 sidecar built on LibreHardwareMonitor. The Times Gate (5 × 128×128 LCDs) is the most fully supported device; most screen-editing code assumes its layout.
+Divoom Monitor is a Tauri 2 desktop app (Rust backend + Vue 3/TypeScript/Element Plus frontend) for controlling Divoom devices over the local network: device settings, per-screen image/text editing, and a "PC Monitor" mode that streams CPU/GPU/RAM/disk metrics to the device. On Windows, temperatures come from a separate .NET 8 sidecar built on LibreHardwareMonitor. The Times Gate (5 × 128×128 LCDs) is the most fully supported device; most screen-editing code assumes its layout.
 
 ## Commands
 
@@ -12,7 +12,8 @@ Package manager is **pnpm**. Rust unit tests cover the Divoom API layer (`pnpm t
 
 ```bash
 pnpm install
-pnpm build:sidecar      # dotnet publish -> src-tauri/sidecar/ (Windows, needs .NET 6 SDK)
+pnpm build:sidecar      # dotnet publish -> src-tauri/sidecar/ + download PawnIO setup -> src-tauri/redist/ (Windows, needs .NET 8 SDK)
+pnpm sidecar:install    # (UAC) rebuild sidecar, install PawnIO, register/restart the dev service; also sidecar:uninstall / sidecar:status
 pnpm start              # tauri dev (runs `pnpm dev` = Vite on :1420, strictPort)
 pnpm start:linux        # same, with WEBKIT_DISABLE_COMPOSITING_MODE=1
 pnpm build              # vue-tsc --noEmit && vite build  (frontend type-check + bundle)
@@ -32,7 +33,10 @@ Releases: pushing to the `release` branch (or manual dispatch) runs `.github/wor
 
 1. **Vue webview** (`src/`) holds UI and nearly all persisted state, in `localStorage`.
 2. **Rust core** (`src-tauri/src/`) exposes `#[tauri::command]`s and does all network I/O to devices and Divoom cloud, plus image processing.
-3. **HardwareMonitorCli** (`hardware-monitor-cli/Program.cs`) is a .NET Worker that serves sensor JSON at `http://localhost:8765/` (and `/shutdown`). In production the NSIS hooks (`src-tauri/nsis/hooks.nsh`) register it as the auto-start Windows service `HardwareMonitorCli` (installer is `perMachine` because of this). In dev, `system_metrics::start_sidecar_service` probes port 8765, tries `sc start`, then spawns the exe directly from `LHM_SIDECAR_PATH` (via `.env`, loaded by `dotenvy`) or `<exe_dir>/sidecar/`.
+3. **HardwareMonitorCli** (`hardware-monitor-cli/Program.cs`) is a .NET Worker that serves sensor JSON at `http://localhost:8765/`. It opens the port first and returns 503 until LibreHardwareMonitor has initialised.
+   - **CPU temperature needs two things.** LibreHardwareMonitor ≥0.9.5 reads it through the **PawnIO** kernel driver (WinRing0 is gone). PawnIO must be installed system-wide (the NuGet package does not install it), and the reading process must be privileged. When the temperature is missing, the JSON field `cpu_temperature_issue` (`not_elevated` / `no_driver`; the Rust fallback adds `no_sidecar`) explains why, and the PC Monitor tab shows the reason.
+   - **Production.** The NSIS hooks (`src-tauri/nsis/hooks.nsh`) do the setup at install time, which is why the installer is `perMachine`. PREINSTALL runs `net stop` so updates can overwrite the locked exe. POSTINSTALL runs the bundled `redist/PawnIO_setup.exe -install -silent` (pinned and hash-checked by `scripts/fetch-pawnio.ps1`), then registers the auto-start LocalSystem service with a quoted binPath. Uninstall removes the service and leaves PawnIO, because the driver is shared with other apps.
+   - **Dev.** `system_metrics::start_sidecar_service` waits up to 30 s for the port when the service is registered (an unelevated app can't start it). Otherwise it spawns the exe as an unelevated child from `LHM_SIDECAR_PATH` (via `.env`, loaded by `dotenvy`) or `<exe_dir>/sidecar/`, which means no CPU temperature. Use `pnpm sidecar:install` to get the real setup.
 
 ### Talking to devices
 
@@ -67,5 +71,5 @@ Tauri converts Rust `snake_case` args to camelCase on the JS side (`ip_address` 
 ### Platform notes
 
 - Windows-only code is behind `cfg(target_os = "windows")` (WMI, NVML, `CREATE_NO_WINDOW`, `sc`/`taskkill`). Keep non-Windows builds compiling when touching `system_metrics.rs`.
-- `stop_sidecar_service` runs on quit, on close when not minimizing to tray, and from the panic hook.
+- `stop_sidecar_service` runs on quit, on close when not minimizing to tray, and from the panic hook. It only kills a child process the app spawned itself; the service keeps running.
 - Code comments are a mix of English and Russian.

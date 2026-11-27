@@ -108,6 +108,11 @@ export default {
     temperature: 'Температура',
     used: 'Занято',
     gpuHint: 'Данные GPU недоступны. Убедитесь, что служба HardwareMonitorCli запущена.',
+    cpuTempIssue: {
+      not_elevated: 'Нужна служба HardwareMonitorCli с правами системы. В режиме разработки выполните pnpm sidecar:install.',
+      no_driver: 'Не установлен драйвер PawnIO. Переустановите приложение или выполните pnpm sidecar:install.',
+      no_sidecar: 'Служба HardwareMonitorCli не отвечает, температура CPU недоступна.',
+    },
     of: 'из',
     disks: 'Диски',
     disksUnavailable: 'Данные о дисках недоступны.',
