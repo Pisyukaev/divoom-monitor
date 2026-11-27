@@ -1,81 +1,25 @@
-import { invoke } from '@tauri-apps/api/core';
 import { scanDevices } from '../api/common';
 import type { ScreenConfigs } from '../types/screen';
 import type { DivoomDevice } from '../types/device';
+import { sendScreen } from '../utils/screenRender';
 
 /**
- * Sends screen configurations to a device
+ * Sends screen configurations to a device. Each screen (image + texts) is
+ * rendered on the PC and sent as one picture; empty screens are left alone so
+ * the device keeps whatever dial it shows there.
  */
 export async function sendConfigsToDevice(
   deviceIp: string,
   screenConfigs: ScreenConfigs
 ): Promise<void> {
-  // Send images and texts for each screen
   for (let i = 0; i < 5; i++) {
     const config = screenConfigs[i];
-    if (!config) continue;
+    if (!config || (!config.image && config.texts.length === 0)) continue;
 
-    // Send image if present
-    if (config.image) {
-      let method = '';
-
-      switch (config.image.type) {
-        case 'url':
-          method = 'upload_image_from_url';
-          break;
-
-        case 'local':
-          method = 'upload_image_from_file';
-          break;
-
-        default:
-          throw new Error(`Invalid image type: ${config.image.type}`);
-      }
-
-      const params: Record<string, unknown> = {
-          ipAddress: deviceIp,
-          screenIndex: i,
-        };
-
-      if (config.image.type === 'url') {
-        params.url = config.image.source;
-      } else if (config.image.type === 'local') {
-        params.filePath = config.image.source;
-      }
-
-      try {
-        await invoke(method, params);
-      } catch (error) {
-        console.error(
-          `Error sending image for screen ${i} to ${deviceIp}:`,
-          error
-        );
-      }
-    }
-
-    // Send all texts for this screen
-    for (const text of config.texts) {
-      try {
-        await invoke('set_screen_text', {
-          ipAddress: deviceIp,
-          screenIndex: i,
-          textConfig: {
-            id: text.id,
-            content: text.content,
-            x: text.x,
-            y: text.y,
-            font: text.font,
-            color: text.color?.toUpperCase(),
-            alignment: text.alignment,
-            text_width: text.textWidth,
-          },
-        });
-      } catch (error) {
-        console.error(
-          `Error sending text for screen ${i} to ${deviceIp}:`,
-          error
-        );
-      }
+    try {
+      await sendScreen(deviceIp, { ...config, screenIndex: i });
+    } catch (error) {
+      console.error(`Error sending screen ${i} to ${deviceIp}:`, error);
     }
   }
 }

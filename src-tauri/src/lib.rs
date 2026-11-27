@@ -1,6 +1,7 @@
 mod app_settings;
 mod device_commands;
 mod divoom_api;
+mod divoom_protocol;
 mod draw_commands;
 mod models;
 mod system_metrics;
@@ -121,9 +122,11 @@ pub fn run() {
             device_commands::set_mirror_mode,
             device_commands::set_24_hours_mode,
             device_commands::reboot_device,
+            device_commands::set_local_token,
             draw_commands::upload_image_from_url,
             draw_commands::upload_image_from_file,
-            draw_commands::set_screen_text,
+            draw_commands::upload_image_data,
+            draw_commands::fetch_image_base64,
             draw_commands::get_lcd_info,
             draw_commands::activate_pc_monitor,
             draw_commands::send_pc_metrics,

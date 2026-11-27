@@ -5,10 +5,13 @@ import { useI18n } from 'vue-i18n';
 import AppSidebar from './components/layout/AppSidebar.vue';
 import { sendConfigsToAllDevices } from './composables/useAutoSendConfig';
 import { startPcMonitorForAllDevices } from './composables/usePcMonitorSend';
+import { syncLocalTokens } from './utils/localToken';
 
 const { t } = useI18n();
 
-onMounted(() => {
+onMounted(async () => {
+  // Tokens must reach the backend before the first device requests.
+  await syncLocalTokens();
   startPcMonitorForAllDevices();
   sendConfigsToAllDevices();
 });

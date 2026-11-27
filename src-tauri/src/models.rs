@@ -31,18 +31,6 @@ pub struct DeviceSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TextConfig {
-    pub id: u8,
-    pub content: String,
-    pub x: u8,
-    pub y: u8,
-    pub font: Option<u8>,
-    pub color: Option<String>,
-    pub alignment: Option<u8>,
-    pub text_width: Option<u8>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcdInfo {
     pub lcd_clock_id: u64,
 }
@@ -56,5 +44,9 @@ pub struct LcdIndependenceInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcdInfoResponse {
     pub device_id: u64,
+    /// 0 = whole dial, 1 = independent dials.
+    pub channel_type: u64,
+    /// The independence dial currently selected on the device.
+    pub lcd_independence: u64,
     pub independence_list: Vec<LcdIndependenceInfo>,
 }

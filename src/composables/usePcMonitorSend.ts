@@ -4,7 +4,7 @@ import {
   getLcdInfo,
   activatePcMonitor,
 } from '../api/system';
-import type { SystemMetrics } from '../types/system';
+import { selectedIndependence, type SystemMetrics } from '../types/system';
 
 const STORAGE_KEY_PREFIX = 'pc_monitor_';
 const SEND_INTERVAL_MS = 2000;
@@ -127,7 +127,7 @@ async function activateWithRetry(
         `[PC Monitor] Activating PC monitor on ${ip}, screen ${lcdIndex} (attempt ${attempt + 1})`
       );
       const info = await getLcdInfo(ip);
-      const independence = info.independence_list[0];
+      const independence = selectedIndependence(info);
       if (independence) {
         await activatePcMonitor(
           ip,

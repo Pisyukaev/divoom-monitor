@@ -3,7 +3,10 @@ export interface TextElement {
   content: string;
   x: number;
   y: number;
+  /** Index into FONT_OPTIONS. */
   font?: number;
+  /** Font size in device pixels; DEFAULT_TEXT_SIZE when missing (older configs). */
+  fontSize?: number;
   color?: string;
   alignment?: number;
   textWidth: number;

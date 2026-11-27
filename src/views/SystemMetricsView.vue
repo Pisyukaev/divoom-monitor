@@ -14,7 +14,13 @@ import {
   stopPcMonitorLoop,
   isPcMonitorRunning,
 } from '../composables/usePcMonitorSend';
-import type { DiskUsage, SystemMetrics, LcdInfoResponse, LcdIndependenceInfo } from '../types/system';
+import {
+  selectedIndependence,
+  type DiskUsage,
+  type SystemMetrics,
+  type LcdInfoResponse,
+  type LcdIndependenceInfo,
+} from '../types/system';
 
 const { t } = useI18n();
 
@@ -54,10 +60,7 @@ const memoryUsagePercent = computed(() => {
 const disks = computed<DiskUsage[]>(() => metrics.value?.disks ?? []);
 
 const currentIndependence = computed<LcdIndependenceInfo | null>(() => {
-  if (!lcdInfo.value || lcdInfo.value.independence_list.length === 0) {
-    return null;
-  }
-  return lcdInfo.value.independence_list[0];
+  return lcdInfo.value ? selectedIndependence(lcdInfo.value) : null;
 });
 
 const screenOptions = computed(() => {

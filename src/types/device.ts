@@ -15,12 +15,13 @@ export interface NetworkSettings {
   signal_strength?: number;
 }
 
+/** Mirrors `DeviceSettings` in models.rs: every field is `null` when the device didn't report it. */
 export interface DeviceSettings {
-  brightness?: number;
-  rotation_flag: number;
-  date_format: string;
-  time24_flag: number;
-  temperature_mode: number;
-  mirror_flag: number;
-  light_switch: number;
+  brightness: number | null;
+  rotation_flag: number | null;
+  date_format: string | null;
+  time24_flag: number | null;
+  temperature_mode: number | null;
+  mirror_flag: number | null;
+  light_switch: number | null;
 }

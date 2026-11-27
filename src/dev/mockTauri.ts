@@ -36,6 +36,10 @@ const deviceSettings: Record<string, unknown> = {
   light_switch: 1,
 };
 
+// Like newer Times Gate firmware: settings are only returned with a LocalToken.
+const tokenRequiredIps = new Set(['192.168.1.42']);
+const localTokens = new Map<string, number>();
+
 const lcdClocks = [625, 0, 12, 0, 0];
 let closeToTray = true;
 let autostart = false;
@@ -61,6 +65,18 @@ function systemMetrics() {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function mockImageDataUrl(): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createLinearGradient(0, 0, 128, 128);
+  gradient.addColorStop(0, '#6d5dfc');
+  gradient.addColorStop(1, '#0bb5a5');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  return canvas.toDataURL('image/png');
+}
+
 export function installTauriMock() {
   mockWindows('main');
   mockIPC(async (cmd, payload) => {
@@ -71,7 +87,19 @@ export function installTauriMock() {
         return devices;
       case 'get_device_info':
         await delay(300);
+        if (tokenRequiredIps.has(args.ipAddress as string) && !localTokens.has(args.ipAddress as string)) {
+          throw 'LOCAL_TOKEN_REQUIRED: device needs a valid LocalToken to read settings';
+        }
         return { ...deviceSettings };
+      case 'fetch_image_base64':
+        // A browser can't download cross-origin images for a canvas; return a
+        // generated 128 × 128 gradient instead.
+        await delay(200);
+        return mockImageDataUrl();
+      case 'set_local_token':
+        if (args.token == null) localTokens.delete(args.ipAddress as string);
+        else localTokens.set(args.ipAddress as string, args.token as number);
+        return null;
       case 'set_brightness':
         deviceSettings.brightness = args.value;
         return null;
@@ -90,7 +118,7 @@ export function installTauriMock() {
       case 'reboot_device':
       case 'upload_image_from_url':
       case 'upload_image_from_file':
-      case 'set_screen_text':
+      case 'upload_image_data':
       case 'send_pc_metrics':
         await delay(200);
         return null;
@@ -98,6 +126,8 @@ export function installTauriMock() {
         await delay(300);
         return {
           device_id: 300012345,
+          channel_type: 1,
+          lcd_independence: 1,
           independence_list: [
             { lcd_independence: 1, lcd_list: lcdClocks.map((id) => ({ lcd_clock_id: id })) },
           ],
