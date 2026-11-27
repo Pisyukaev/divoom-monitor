@@ -10,6 +10,11 @@ export interface TextElement {
   color?: string;
   alignment?: number;
   textWidth: number;
+  /**
+   * Font of a live text (one with `{cpu}`-style placeholders), which the device
+   * draws itself: an id from DEVICE_FONTS. `font`/`fontSize` apply to static texts only.
+   */
+  deviceFont?: number;
 }
 
 export interface ScreenImage {

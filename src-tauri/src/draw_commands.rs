@@ -64,7 +64,7 @@ async fn download_image(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Strips an optional `data:<mime>;base64,` prefix and decodes.
-fn decode_base64_image(data: &str) -> Result<DynamicImage, String> {
+pub(crate) fn decode_base64_image(data: &str) -> Result<DynamicImage, String> {
     let b64 = data.split_once(";base64,").map_or(data, |(_, b64)| b64);
     let bytes = general_purpose::STANDARD
         .decode(b64.trim())
@@ -77,6 +77,8 @@ fn load_image_from_file(file_path: &str) -> Result<DynamicImage, String> {
 }
 
 async fn send_image(ip_address: &str, screen_index: u32, img: DynamicImage) -> Result<(), String> {
+    // A static picture replaces the screen's live values, if it had any.
+    crate::live_screen::forget(ip_address, screen_index);
     let jpeg = resize_image(img, LCD_SIZE, LCD_SIZE)?;
     let payload = proto::send_http_gif(
         screen_index,

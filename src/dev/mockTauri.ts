@@ -119,6 +119,7 @@ export function installTauriMock() {
       case 'upload_image_from_url':
       case 'upload_image_from_file':
       case 'upload_image_data':
+      case 'send_live_screen':
       case 'send_pc_metrics':
         await delay(200);
         return null;

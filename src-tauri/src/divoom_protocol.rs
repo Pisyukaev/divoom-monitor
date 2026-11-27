@@ -258,11 +258,73 @@ pub fn send_http_gif(screen_index: u32, pic_id: u32, width: u32, jpeg_base64: &s
     })
 }
 
-// Screen text is drawn into the image on the PC (frontend canvas) and sent
-// with Draw/SendHttpGif. Tested on a Times Gate: Draw/SendHttpText returns
-// error_code 0 but draws nothing; Draw/SendHttpItemList hangs the LCD on
-// "loading..." unless BackgroudGif is an internet URL (so no local image under
-// the text), and its free-text items (type 22) appear only now and then.
+// Static screen text is drawn into the image on the PC (frontend canvas) and
+// sent with Draw/SendHttpGif. Live values (CPU load, temperatures, ...) use
+// Draw/SendHttpItemList below, so the device redraws only the text.
+//
+// Tested on a Times Gate:
+// - Draw/SendHttpText answers "Request data illegal json" when x, y or
+//   TextWidth is above 64, so it can't place text in the lower part of a
+//   128 px screen. Not used.
+// - Draw/SendHttpItemList works with a 128 × 128 GIF background served from
+//   this PC (live_screen.rs) and type-23 items that the device polls itself:
+//   no "loading..." flashes between updates. It hangs on "loading..." with a
+//   64 × 64 background, or when an item uses a font id the device lacks
+//   (DEVICE_FONTS in src/constants.ts lists the ones seen working). Type-22
+//   (fixed text) items did not show, so labels belong in the background.
+
+/// ItemList `type`: text fetched by the device from `TextString` (a URL that
+/// answers `{"DispData": "..."}`) every `update_time` seconds.
+pub const ITEM_TYPE_NET_TEXT: u32 = 23;
+
+/// One type-23 item of `Draw/SendHttpItemList`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NetTextItem {
+    /// Unique per screen, below 40.
+    pub text_id: u32,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub font: u32,
+    /// `#RRGGBB`.
+    pub color: String,
+    /// 1 left, 2 center, 3 right.
+    pub align: u32,
+    pub url: String,
+    pub update_seconds: u32,
+}
+
+/// `Draw/SendHttpItemList` with `NewFlag: 1` (replaces the screen's items).
+/// The field name `BackgroudGif` is spelled as the device expects.
+pub fn send_http_item_list(lcd_index: u32, background_gif_url: &str, items: &[NetTextItem]) -> Value {
+    let items: Vec<Value> = items
+        .iter()
+        .map(|item| {
+            json!({
+                "TextId": item.text_id,
+                "type": ITEM_TYPE_NET_TEXT,
+                "x": item.x,
+                "y": item.y,
+                "dir": 0,
+                "font": item.font,
+                "TextWidth": item.width,
+                "Textheight": 16,
+                "speed": 100,
+                "align": item.align,
+                "color": item.color,
+                "update_time": item.update_seconds,
+                "TextString": item.url
+            })
+        })
+        .collect();
+    json!({
+        "Command": "Draw/SendHttpItemList",
+        "LcdIndex": lcd_index,
+        "NewFlag": 1,
+        "BackgroudGif": background_gif_url,
+        "ItemList": items
+    })
+}
 
 /// Body of the cloud `Channel/Get5LcdInfoV2` request (POST, JSON).
 pub fn get_5lcd_info_body(device_id: u64) -> Value {
@@ -570,6 +632,47 @@ mod tests {
             json!({
                 "Command": "Device/UpdatePCParaInfo",
                 "ScreenList": [{ "LcdId": 1, "DispData": ["10%", "20%"] }]
+            })
+        );
+    }
+
+    #[test]
+    fn send_http_item_list_matches_doc_shape() {
+        // Field names and spelling ("BackgroudGif", "Textheight") as in the
+        // "Send display list" page; type 23 items fetch their text from a URL.
+        let item = NetTextItem {
+            text_id: 3,
+            x: 8,
+            y: 100,
+            width: 112,
+            font: 4,
+            color: "#00FF00".into(),
+            align: 2,
+            url: "http://10.0.0.2:47630/text/10.0.0.5/1/3".into(),
+            update_seconds: 2,
+        };
+        assert_eq!(
+            send_http_item_list(1, "http://10.0.0.2:47630/bg/10.0.0.5/1/7.gif", &[item]),
+            json!({
+                "Command": "Draw/SendHttpItemList",
+                "LcdIndex": 1,
+                "NewFlag": 1,
+                "BackgroudGif": "http://10.0.0.2:47630/bg/10.0.0.5/1/7.gif",
+                "ItemList": [{
+                    "TextId": 3,
+                    "type": 23,
+                    "x": 8,
+                    "y": 100,
+                    "dir": 0,
+                    "font": 4,
+                    "TextWidth": 112,
+                    "Textheight": 16,
+                    "speed": 100,
+                    "align": 2,
+                    "color": "#00FF00",
+                    "update_time": 2,
+                    "TextString": "http://10.0.0.2:47630/text/10.0.0.5/1/3"
+                }]
             })
         );
     }

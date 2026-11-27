@@ -61,6 +61,40 @@ export const DEFAULT_TEXT_SIZE = 16;
 export const MIN_TEXT_SIZE = 6;
 export const MAX_TEXT_SIZE = 64;
 
+/**
+ * Placeholders for live values, typed into a screen text as `{key}`. Keys must
+ * match `placeholder_value` in src-tauri/src/live_screen.rs. `sample` stands in
+ * for the value in the editor preview.
+ */
+export const LIVE_VALUES: { key: string; labelKey: string; sample: string }[] = [
+  { key: 'cpu', labelKey: 'cpu', sample: '42' },
+  { key: 'cpu_temp', labelKey: 'cpuTemp', sample: '55' },
+  { key: 'gpu', labelKey: 'gpu', sample: '37' },
+  { key: 'gpu_temp', labelKey: 'gpuTemp', sample: '61' },
+  { key: 'ram', labelKey: 'ram', sample: '48' },
+  { key: 'ram_used', labelKey: 'ramUsed', sample: '7.6' },
+  { key: 'ram_total', labelKey: 'ramTotal', sample: '15.9' },
+  { key: 'disk', labelKey: 'disk', sample: '63' },
+];
+
+/**
+ * Device fonts for live values, checked on a Times Gate. The device draws live
+ * values itself, so only its own fonts can be used, and an id it lacks hangs
+ * the whole screen on "loading...": don't add ids without trying them.
+ * `previewSize` approximates the glyph height for the editor preview.
+ */
+export const DEVICE_FONTS: { value: number; noteKey?: string; previewSize: number }[] = [
+  { value: 4, previewSize: 10 },
+  { value: 2, previewSize: 10 },
+  { value: 32, previewSize: 11 },
+  { value: 52, previewSize: 10 },
+  { value: 20, noteKey: 'deviceFontDigits', previewSize: 14 },
+  { value: 18, noteKey: 'deviceFontTiny', previewSize: 7 },
+];
+export const DEFAULT_DEVICE_FONT = 4;
+/** Height of a live value's line on the device, in pixels. */
+export const LIVE_TEXT_HEIGHT = 16;
+
 export const TEXT_IDS: number[] = [
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 ];

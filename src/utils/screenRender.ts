@@ -2,23 +2,48 @@ import { invoke } from '@tauri-apps/api/core';
 import { readFile } from '@tauri-apps/plugin-fs';
 
 import {
+  DEFAULT_DEVICE_FONT,
   DEFAULT_TEXT_ALIGNMENT,
   DEFAULT_TEXT_FONT,
   DEFAULT_TEXT_SIZE,
+  DEVICE_FONTS,
   FONT_OPTIONS,
+  LIVE_TEXT_HEIGHT,
+  LIVE_VALUES,
   TEXT_ALIGNMENT_OPTIONS,
 } from '../constants';
 import type { ScreenConfig, ScreenImage, TextElement } from '../types/screen';
 
 /**
  * A Times Gate screen is composed here (image + texts on a 128 × 128 canvas)
- * and sent as one picture with `upload_image_data` → Draw/SendHttpGif.
- * The device's own text commands are not used: on a real Times Gate
- * Draw/SendHttpText draws nothing and Draw/SendHttpItemList is unreliable and
- * cannot keep a local image under the text. The editor preview shows the same
- * rendered picture, so what you see is what the device gets.
+ * and sent as one picture with `upload_image_data` → Draw/SendHttpGif. The
+ * editor preview shows the same rendered picture.
+ *
+ * Live texts (with `{cpu}`-style placeholders) are the exception: re-sending
+ * the picture on every change makes the screen flash "loading...", so the
+ * picture without them becomes a static background and the device draws and
+ * updates the values itself (`send_live_screen`, src-tauri/src/live_screen.rs).
+ * The preview draws them with sample values in an approximate font.
  */
 export const SCREEN_SIZE = 128;
+
+const PLACEHOLDER = /\{([a-z_]+)\}/g;
+const LIVE_KEYS = new Set(LIVE_VALUES.map((v) => v.key));
+
+/** True if the text has at least one known placeholder such as `{cpu}`. */
+export function isLiveText(text: Pick<TextElement, 'content'>): boolean {
+  return [...text.content.matchAll(PLACEHOLDER)].some((m) => LIVE_KEYS.has(m[1]));
+}
+
+/** The text as the preview shows it: placeholders replaced by sample values. */
+export function fillSamples(content: string): string {
+  return content.replace(PLACEHOLDER, (match, key: string) =>
+    LIVE_VALUES.find((v) => v.key === key)?.sample ?? match);
+}
+
+export function deviceFont(font: number | undefined): number {
+  return DEVICE_FONTS.some((f) => f.value === font) ? (font as number) : DEFAULT_DEVICE_FONT;
+}
 
 export function textFont(font: number | undefined): number {
   return FONT_OPTIONS.some((f) => f.value === font) ? (font as number) : DEFAULT_TEXT_FONT;
@@ -39,8 +64,9 @@ export function textFontFamily(font: number | undefined): string {
   return FONT_OPTIONS.find((f) => f.value === textFont(font))?.family ?? 'sans-serif';
 }
 
-/** Height of a text's box: the font size plus room for descenders. */
-export function textBoxHeight(text: Pick<TextElement, 'fontSize'>): number {
+/** Height of a text's box: the font size plus room for descenders (a device line for live texts). */
+export function textBoxHeight(text: Pick<TextElement, 'fontSize' | 'content'>): number {
+  if (isLiveText(text)) return LIVE_TEXT_HEIGHT;
   return Math.ceil(textSize(text) * 1.25);
 }
 
@@ -87,18 +113,23 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement) {
 
 function drawText(ctx: CanvasRenderingContext2D, text: TextElement) {
   if (!text.content) return;
-  const size = textSize(text);
+  const live = isLiveText(text);
   ctx.save();
   ctx.beginPath();
   ctx.rect(text.x, text.y, text.textWidth, textBoxHeight(text));
   ctx.clip(); // text wider than its area is cut off
-  ctx.font = `${size}px ${textFontFamily(text.font)}`;
+  if (live) {
+    const size = DEVICE_FONTS.find((f) => f.value === deviceFont(text.deviceFont))?.previewSize ?? 10;
+    ctx.font = `bold ${size}px Verdana, sans-serif`;
+  } else {
+    ctx.font = `${textSize(text)}px ${textFontFamily(text.font)}`;
+  }
   ctx.fillStyle = text.color || '#FFFFFF';
   ctx.textBaseline = 'top';
   const align = textAlignment(text.alignment);
   ctx.textAlign = align === 2 ? 'center' : align === 3 ? 'right' : 'left';
   const x = align === 2 ? text.x + text.textWidth / 2 : align === 3 ? text.x + text.textWidth : text.x;
-  ctx.fillText(text.content, x, text.y);
+  ctx.fillText(live ? fillSamples(text.content) : text.content, x, text.y);
   ctx.restore();
 }
 
@@ -109,7 +140,14 @@ export interface RenderedScreen {
   imageError: string | null;
 }
 
-export async function renderScreen(config: Pick<ScreenConfig, 'image' | 'texts'>): Promise<RenderedScreen> {
+/**
+ * Draws the screen. `liveTexts: false` leaves live texts out (the background
+ * sent to the device, which draws them itself); the preview draws them with samples.
+ */
+export async function renderScreen(
+  config: Pick<ScreenConfig, 'image' | 'texts'>,
+  { liveTexts = true }: { liveTexts?: boolean } = {},
+): Promise<RenderedScreen> {
   const canvas = document.createElement('canvas');
   canvas.width = SCREEN_SIZE;
   canvas.height = SCREEN_SIZE;
@@ -128,21 +166,47 @@ export async function renderScreen(config: Pick<ScreenConfig, 'image' | 'texts'>
     }
   }
 
-  for (const text of config.texts) drawText(ctx, text);
+  for (const text of config.texts) {
+    if (liveTexts || !isLiveText(text)) drawText(ctx, text);
+  }
 
   return { dataUrl: canvas.toDataURL('image/png'), imageError };
 }
 
 /**
- * Renders a screen and sends it to the device. Throws if the image can't be
- * loaded, so a broken image never silently replaces the screen with black.
+ * Renders a screen and sends it to the device: as one picture, or, when it has
+ * live texts, as a background plus values the device keeps updating. Throws if
+ * the image can't be loaded, so a broken image never silently replaces the
+ * screen with black.
  */
 export async function sendScreen(ipAddress: string, config: ScreenConfig): Promise<void> {
-  const { dataUrl, imageError } = await renderScreen(config);
+  const live = config.texts.filter(isLiveText);
+  const { dataUrl, imageError } = await renderScreen(config, { liveTexts: live.length === 0 });
   if (imageError) throw new Error(imageError);
-  await invoke('upload_image_data', {
+
+  if (live.length === 0) {
+    await invoke('upload_image_data', {
+      ipAddress,
+      screenIndex: config.screenIndex,
+      data: dataUrl,
+    });
+    return;
+  }
+
+  // Fields inside a struct argument keep their Rust (snake_case) names.
+  await invoke('send_live_screen', {
     ipAddress,
     screenIndex: config.screenIndex,
-    data: dataUrl,
+    background: dataUrl,
+    texts: live.map((text) => ({
+      id: text.id,
+      template: text.content,
+      x: text.x,
+      y: text.y,
+      width: text.textWidth,
+      font: deviceFont(text.deviceFont),
+      color: (text.color || '#FFFFFF').toUpperCase(),
+      align: textAlignment(text.alignment),
+    })),
   });
 }
