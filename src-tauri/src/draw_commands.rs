@@ -9,7 +9,7 @@ use crate::divoom_api::{
     discover_devices_at, get_5lcd_info_at, send_command, send_command_with_timeout,
 };
 use crate::divoom_protocol::{self as proto, CLOUD_BASE_URL};
-use crate::models::{LcdInfoResponse, TextConfig};
+use crate::models::LcdInfoResponse;
 
 /// Times Gate LCD side, in pixels.
 const LCD_SIZE: u32 = 128;
@@ -35,6 +35,11 @@ fn resize_image(img: DynamicImage, width: u32, height: u32) -> Result<Vec<u8>, S
 }
 
 async fn load_image_from_url(url: &str) -> Result<DynamicImage, String> {
+    let bytes = download_image(url).await?;
+    image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode image: {}", e))
+}
+
+async fn download_image(url: &str) -> Result<Vec<u8>, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -55,6 +60,15 @@ async fn load_image_from_url(url: &str) -> Result<DynamicImage, String> {
         .await
         .map_err(|e| format!("Failed to read image bytes: {}", e))?;
 
+    Ok(bytes.to_vec())
+}
+
+/// Strips an optional `data:<mime>;base64,` prefix and decodes.
+fn decode_base64_image(data: &str) -> Result<DynamicImage, String> {
+    let b64 = data.split_once(";base64,").map_or(data, |(_, b64)| b64);
+    let bytes = general_purpose::STANDARD
+        .decode(b64.trim())
+        .map_err(|e| format!("Invalid image data: {}", e))?;
     image::load_from_memory(&bytes).map_err(|e| format!("Failed to decode image: {}", e))
 }
 
@@ -97,16 +111,38 @@ pub async fn upload_image_from_file(
     send_image(&ip_address, screen_index, img).await
 }
 
+/// Sends a screen the frontend composed itself (image + texts drawn on a
+/// canvas). `data` is base64, optionally as a `data:` URL.
 #[tauri::command]
-pub async fn set_screen_text(
+pub async fn upload_image_data(
     ip_address: String,
     screen_index: u32,
-    text_config: TextConfig,
+    data: String,
 ) -> Result<(), String> {
-    send_command(&ip_address, &proto::send_http_text(screen_index, &text_config))
-        .await
-        .map_err(|e| format!("Failed to send text command: {}", e))?;
-    Ok(())
+    let img = decode_base64_image(&data)?;
+    send_image(&ip_address, screen_index, img).await
+}
+
+/// Downloads an image for the frontend canvas as a `data:` URL. Drawing a
+/// cross-origin image directly would taint the canvas and block export.
+#[tauri::command]
+pub async fn fetch_image_base64(url: String) -> Result<String, String> {
+    let bytes = download_image(&url).await?;
+    let format = image::guess_format(&bytes)
+        .map_err(|e| format!("Failed to decode image: {}", e))?;
+    let mime = match format {
+        image::ImageFormat::Png => "image/png",
+        image::ImageFormat::Jpeg => "image/jpeg",
+        image::ImageFormat::Gif => "image/gif",
+        image::ImageFormat::WebP => "image/webp",
+        image::ImageFormat::Bmp => "image/bmp",
+        _ => return Err(format!("Unsupported image format: {:?}", format)),
+    };
+    Ok(format!(
+        "data:{};base64,{}",
+        mime,
+        general_purpose::STANDARD.encode(&bytes)
+    ))
 }
 
 #[tauri::command]
@@ -277,29 +313,80 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_screen_text_sends_send_http_text() {
+    async fn upload_image_data_sends_composed_screen() {
         let server = ok_device().await;
-        let cfg = TextConfig {
-            id: 2,
-            content: "CPU".into(),
-            x: 10,
-            y: 20,
-            font: Some(3),
-            color: Some("#00FF00".into()),
-            alignment: Some(2),
-            text_width: Some(48),
-        };
+        let data_url = format!(
+            "data:image/png;base64,{}",
+            general_purpose::STANDARD.encode(png_bytes(200, 100, [255, 0, 0]))
+        );
 
-        set_screen_text(host(&server), 1, cfg).await.unwrap();
+        upload_image_data(host(&server), 4, data_url).await.unwrap();
 
-        let body = &sent_bodies(&server).await[0];
-        assert_eq!(body["Command"], "Draw/SendHttpText");
-        assert_eq!(body["LcdIndex"], 1);
-        assert_eq!(body["TextId"], 2);
-        assert_eq!(body["TextString"], "CPU");
-        assert_eq!(body["color"], "#00FF00");
-        assert_eq!(body["align"], 2);
-        assert_eq!(body["TextWidth"], 48);
+        let bodies = sent_bodies(&server).await;
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0]["Command"], "Draw/SendHttpGif");
+        assert_eq!(bodies[0]["LcdArray"], json!([0, 0, 0, 0, 1]));
+        let jpeg = general_purpose::STANDARD
+            .decode(bodies[0]["PicData"].as_str().unwrap())
+            .unwrap();
+        let decoded = image::load_from_memory(&jpeg).unwrap().to_rgb8();
+        assert_eq!(decoded.dimensions(), (128, 128));
+        let px = decoded.get_pixel(64, 64);
+        assert!(px[0] > 200 && px[1] < 60 && px[2] < 60, "still red: {px:?}");
+    }
+
+    #[tokio::test]
+    async fn upload_image_data_accepts_plain_base64() {
+        let server = ok_device().await;
+        let b64 = general_purpose::STANDARD.encode(png_bytes(8, 8, [0, 0, 255]));
+        upload_image_data(host(&server), 0, b64).await.unwrap();
+        assert_eq!(sent_bodies(&server).await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn upload_image_data_rejects_bad_data_without_request() {
+        let server = ok_device().await;
+        let err = upload_image_data(host(&server), 0, "not base64!".into())
+            .await
+            .unwrap_err();
+        assert!(err.contains("Invalid image data"), "{err}");
+        let err = upload_image_data(host(&server), 0, general_purpose::STANDARD.encode("text"))
+            .await
+            .unwrap_err();
+        assert!(err.contains("Failed to decode image"), "{err}");
+        assert!(sent_bodies(&server).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn fetch_image_base64_returns_data_url() {
+        let server = MockServer::start().await;
+        let png = png_bytes(4, 4, [0, 255, 0]);
+        Mock::given(method("GET"))
+            .and(path("/pic"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(png.clone()))
+            .mount(&server)
+            .await;
+
+        let url = fetch_image_base64(format!("{}/pic", server.uri())).await.unwrap();
+        let b64 = url.strip_prefix("data:image/png;base64,").expect(&url);
+        assert_eq!(general_purpose::STANDARD.decode(b64).unwrap(), png);
+    }
+
+    #[tokio::test]
+    async fn fetch_image_base64_rejects_non_images() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("<html>"))
+            .mount(&server)
+            .await;
+        assert!(fetch_image_base64(server.uri()).await.is_err());
+    }
+
+    fn png_bytes(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(w, h, image::Rgb(rgb));
+        let mut out = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut out, image::ImageOutputFormat::Png).unwrap();
+        out.into_inner()
     }
 
     #[tokio::test]

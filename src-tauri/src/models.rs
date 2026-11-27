@@ -31,18 +31,6 @@ pub struct DeviceSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TextConfig {
-    pub id: u8,
-    pub content: String,
-    pub x: u8,
-    pub y: u8,
-    pub font: Option<u8>,
-    pub color: Option<String>,
-    pub alignment: Option<u8>,
-    pub text_width: Option<u8>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LcdInfo {
     pub lcd_clock_id: u64,
 }

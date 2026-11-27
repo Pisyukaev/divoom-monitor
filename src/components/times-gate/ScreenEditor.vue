@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
-import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FolderOpened, Link, Delete, Picture } from '@element-plus/icons-vue';
 import ScreenPreview from './ScreenPreview.vue';
-// import TextElement from './TextElement.vue';
-import type { ScreenConfig, TextElement as TextElementType } from '../../types/screen';
+import TextElement from './TextElement.vue';
+import { sendScreen } from '../../utils/screenRender';
+import type { ScreenConfig, ScreenImage, TextElement as TextElementType } from '../../types/screen';
 
 const { t } = useI18n();
 
@@ -26,115 +26,115 @@ const selectedText = ref<TextElementType | null>(null);
 
 const localConfig = ref<ScreenConfig>(props.config);
 
-async function handleLoadLocalImage() {
+// The whole screen (image + texts) is rendered on the PC and sent as one
+// picture (utils/screenRender.ts). Text edits are sent shortly after the last
+// change, so typing or dragging produces one request instead of dozens.
+const SEND_DELAY_MS = 400;
+let sendTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleSend() {
+  clearTimeout(sendTimer);
+  sendTimer = setTimeout(sendNow, SEND_DELAY_MS);
+}
+
+async function sendNow() {
+  clearTimeout(sendTimer);
+  sendTimer = undefined;
   try {
-    const selected = await open({
-      multiple: false,
-      filters: [
-        {
-          name: 'Images',
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
-        },
-      ],
-    });
-
-    if (!selected || Array.isArray(selected)) {
-      return;
-    }
-
-    isLoadingImage.value = true;
-    try {
-      await invoke('upload_image_from_file', {
-        ipAddress: props.deviceIp,
-        screenIndex: props.config.screenIndex,
-        filePath: selected,
-      });
-
-      localConfig.value = {
-        ...localConfig.value,
-        image: {
-          type: 'local',
-          source: selected,
-        },
-      };
-
-      ElMessage.success(t('screenEditor.imageLoaded'));
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      ElMessage.error(t('screenEditor.imageLoadError', { error: String(error) }));
-    } finally {
-      isLoadingImage.value = false;
-      emit('update:config', localConfig.value);
-    }
+    await sendScreen(props.deviceIp, localConfig.value);
   } catch (error) {
-    console.error('Error selecting file:', error);
+    console.error('Error sending screen:', error);
+    ElMessage.error(t('screenEditor.textSendError', { error: String(error) }));
   }
 }
 
-async function handleLoadImageFromUrl() {
-  if (!imageUrlInput.value.trim()) {
-    ElMessage.warning(t('screenEditor.enterImageUrl'));
-    return;
-  }
+onBeforeUnmount(() => {
+  // Don't lose the last edit when leaving the page.
+  if (sendTimer !== undefined) sendNow();
+});
 
+function commit(config: ScreenConfig) {
+  localConfig.value = config;
+  emit('update:config', config);
+}
+
+/** Sends the screen with the new image first and saves it only if that worked. */
+async function applyImage(image: ScreenImage): Promise<boolean> {
+  isLoadingImage.value = true;
   try {
-    isLoadingImage.value = true;
-    await invoke('upload_image_from_url', {
-      ipAddress: props.deviceIp,
-      screenIndex: props.config.screenIndex,
-      url: imageUrlInput.value,
-    });
-
-    localConfig.value = {
-      ...localConfig.value,
-      image: {
-        type: 'url',
-        source: imageUrlInput.value,
-      },
-    };
-
+    const next = { ...localConfig.value, image };
+    await sendScreen(props.deviceIp, next);
+    clearTimeout(sendTimer); // this send already includes any pending text edit
+    sendTimer = undefined;
+    commit(next);
     ElMessage.success(t('screenEditor.imageLoaded'));
-    imageUrlInput.value = '';
+    return true;
   } catch (error) {
     console.error('Error uploading image:', error);
     ElMessage.error(t('screenEditor.imageLoadError', { error: String(error) }));
+    return false;
   } finally {
     isLoadingImage.value = false;
-    emit('update:config', localConfig.value);
   }
 }
 
-function handleRemoveImage() {
-  localConfig.value = {
-    ...localConfig.value,
-    image: undefined,
-  };
-
-  emit('update:config', localConfig.value);
+async function handleLoadLocalImage() {
+  let selected: string | string[] | null;
+  try {
+    selected = await open({
+      multiple: false,
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] }],
+    });
+  } catch (error) {
+    console.error('Error selecting file:', error);
+    return;
+  }
+  if (!selected || Array.isArray(selected)) return;
+  await applyImage({ type: 'local', source: selected });
 }
 
-// function handleAddText(text: TextElementType) {
-//   localConfig.value = {
-//     ...localConfig.value,
-//     texts: [...localConfig.value.texts, { ...text, color: text.color?.toUpperCase() }],
-//   };
-//   handleSendTextToDevice(text);
-//   ElMessage.success(t('screenEditor.textAdded'));
-//   emit('update:config', localConfig.value);
-// }
+async function handleLoadImageFromUrl() {
+  const url = imageUrlInput.value.trim();
+  if (!url) {
+    ElMessage.warning(t('screenEditor.enterImageUrl'));
+    return;
+  }
+  if (await applyImage({ type: 'url', source: url })) imageUrlInput.value = '';
+}
+
+function handleRemoveImage() {
+  commit({ ...localConfig.value, image: undefined });
+  scheduleSend();
+}
+
+function commitTexts(texts: TextElementType[], textIds = localConfig.value.textIds) {
+  commit({ ...localConfig.value, texts, textIds });
+  scheduleSend();
+}
+
+function handleAddText(text: TextElementType) {
+  commitTexts(
+    [...localConfig.value.texts, text],
+    localConfig.value.textIds.filter((id) => id !== text.id),
+  );
+  selectedText.value = text;
+  ElMessage.success(t('screenEditor.textAdded'));
+}
+
+function handleUpdateSelectedText(text: TextElementType) {
+  commitTexts(localConfig.value.texts.map((t) => (t.id === text.id ? text : t)));
+  selectedText.value = text;
+}
 
 function handleRemoveText(textId: number) {
   if (selectedText.value?.id === textId) {
     selectedText.value = null;
   }
 
-  localConfig.value = {
-    ...localConfig.value,
-    texts: localConfig.value.texts.filter((t) => t.id !== textId),
-    textIds: [...localConfig.value.textIds, textId],
-  };
-
-  emit('update:config', localConfig.value);
+  commitTexts(
+    localConfig.value.texts.filter((t) => t.id !== textId),
+    [...localConfig.value.textIds, textId].sort((a, b) => a - b),
+  );
 }
 
 function handleTextClick(textId: number | null) {
@@ -148,61 +148,16 @@ function handleTextClick(textId: number | null) {
   selectedText.value = text || null;
 }
 
-// function handleUpdateSelectedText(text: TextElementType) {
-//   if (selectedText.value === null) {
-//     return;
-//   }
-
-//   localConfig.value = {
-//     ...localConfig.value,
-//     texts: localConfig.value.texts.map((t) =>
-//       t.id === text.id
-//         ? {
-//           ...t,
-//           ...text
-//         }
-//         : t
-//     ),
-//   }
-// }
-
 function handleUpdateTextPosition(textId: number, x: number, y: number) {
-  localConfig.value = {
-    ...localConfig.value,
-    texts: localConfig.value.texts.map((t) =>
-      t.id === textId ? { ...t, x: Math.round(x), y: Math.round(y) } : t
-    ),
-  };
+  const texts = localConfig.value.texts.map((t) =>
+    t.id === textId ? { ...t, x: Math.round(x), y: Math.round(y) } : t
+  );
+  commitTexts(texts);
   if (selectedText.value?.id === textId) {
-    selectedText.value.x = Math.round(x);
-    selectedText.value.y = Math.round(y);
+    selectedText.value = texts.find((t) => t.id === textId) ?? null;
   }
 }
 
-// async function handleSendTextToDevice(text: TextElementType) {
-//   try {
-//     await invoke('set_screen_text', {
-//       ipAddress: props.deviceIp,
-//       screenIndex: props.config.screenIndex,
-//       textConfig: {
-//         id: text.id,
-//         content: text.content,
-//         x: text.x,
-//         y: text.y,
-//         font: text.font,
-//         color: text.color?.toUpperCase(),
-//         alignment: text.alignment,
-//         text_width: text.textWidth,
-//       },
-//     });
-//     ElMessage.success(t('screenEditor.textSent'));
-//   } catch (error) {
-//     console.error('Error sending text:', error);
-//     ElMessage.error(t('screenEditor.textSendError', { error: String(error) }));
-//   } finally {
-//     emit('update:config', localConfig.value);
-//   }
-// }
 const imageSourceLabel = computed(() => {
   const image = localConfig.value.image;
   if (!image) return null;
@@ -257,11 +212,23 @@ const imageSourceLabel = computed(() => {
       </div>
 
       <p class="app-muted note">{{ t('screenEditor.instantNote') }}</p>
+
+      <div class="section-divider" />
+
+      <TextElement :text="selectedText" :text-ids="localConfig.textIds" @add:text="handleAddText"
+        @update:text="handleUpdateSelectedText" @deselect="selectedText = null"
+        @delete="(id) => handleRemoveText(id)" />
     </div>
   </section>
 </template>
 
 <style scoped>
+.section-divider {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--el-border-color-lighter);
+}
+
 .screen-editor {
   display: grid;
   grid-template-columns: auto minmax(280px, 1fr);

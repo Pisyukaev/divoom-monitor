@@ -7,7 +7,7 @@
 use serde_json::{json, Number, Value};
 
 use crate::models::{
-    DeviceSettings, DivoomDevice, LcdIndependenceInfo, LcdInfo, LcdInfoResponse, TextConfig,
+    DeviceSettings, DivoomDevice, LcdIndependenceInfo, LcdInfo, LcdInfoResponse,
 };
 
 pub const CLOUD_BASE_URL: &str = "https://app.divoom-gz.com";
@@ -18,8 +18,6 @@ pub const PATH_5LCD_INFO: &str = "/Channel/Get5LcdInfoV2";
 pub const LCD_COUNT: usize = 5;
 /// ClockId of the "PC Monitor" sub dial.
 pub const PC_MONITOR_CLOCK_ID: u64 = 625;
-/// Text color used when the caller does not pass one (docs format: `#RRGGBB`).
-pub const DEFAULT_TEXT_COLOR: &str = "#FFFFFF";
 
 pub fn device_post_url(ip: &str) -> String {
     format!("http://{}/post", ip)
@@ -260,22 +258,11 @@ pub fn send_http_gif(screen_index: u32, pic_id: u32, width: u32, jpeg_base64: &s
     })
 }
 
-pub fn send_http_text(screen_index: u32, text: &TextConfig) -> Value {
-    json!({
-        "Command": "Draw/SendHttpText",
-        "LcdIndex": screen_index,
-        "TextId": text.id,
-        "x": text.x,
-        "y": text.y,
-        "dir": 0,
-        "font": text.font.unwrap_or(7),
-        "TextWidth": text.text_width.unwrap_or(64),
-        "speed": 100,
-        "TextString": text.content,
-        "color": text.color.as_deref().unwrap_or(DEFAULT_TEXT_COLOR),
-        "align": text.alignment.unwrap_or(0)
-    })
-}
+// Screen text is drawn into the image on the PC (frontend canvas) and sent
+// with Draw/SendHttpGif. Tested on a Times Gate: Draw/SendHttpText returns
+// error_code 0 but draws nothing; Draw/SendHttpItemList hangs the LCD on
+// "loading..." unless BackgroudGif is an internet URL (so no local image under
+// the text), and its free-text items (type 22) appear only now and then.
 
 /// Body of the cloud `Channel/Get5LcdInfoV2` request (POST, JSON).
 pub fn get_5lcd_info_body(device_id: u64) -> Value {
@@ -556,57 +543,6 @@ mod tests {
         );
         // Documented key is "LcdArray"; the old "LCDArray" spelling must not come back.
         assert!(payload.get("LCDArray").is_none());
-    }
-
-    fn text(color: Option<&str>) -> TextConfig {
-        TextConfig {
-            id: 4,
-            content: "hello, Divoom".into(),
-            x: 0,
-            y: 40,
-            font: Some(4),
-            color: color.map(str::to_string),
-            alignment: Some(1),
-            text_width: Some(56),
-        }
-    }
-
-    #[test]
-    fn send_http_text_matches_doc_example() {
-        // Request example from the "Send Text" page, except speed (fixed at 100 here).
-        assert_eq!(
-            send_http_text(0, &text(Some("#FFFF00"))),
-            json!({
-                "Command": "Draw/SendHttpText",
-                "LcdIndex": 0,
-                "TextId": 4,
-                "x": 0,
-                "y": 40,
-                "dir": 0,
-                "font": 4,
-                "TextWidth": 56,
-                "speed": 100,
-                "TextString": "hello, Divoom",
-                "color": "#FFFF00",
-                "align": 1
-            })
-        );
-    }
-
-    #[test]
-    fn send_http_text_defaults_use_documented_formats() {
-        let cfg = TextConfig {
-            font: None,
-            alignment: None,
-            text_width: None,
-            ..text(None)
-        };
-        let payload = send_http_text(3, &cfg);
-        assert_eq!(payload["color"], "#FFFFFF");
-        assert_eq!(payload["font"], 7);
-        assert_eq!(payload["TextWidth"], 64);
-        assert_eq!(payload["align"], 0);
-        assert_eq!(payload["LcdIndex"], 3);
     }
 
     #[test]

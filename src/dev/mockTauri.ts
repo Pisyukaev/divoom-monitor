@@ -65,6 +65,18 @@ function systemMetrics() {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function mockImageDataUrl(): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const gradient = ctx.createLinearGradient(0, 0, 128, 128);
+  gradient.addColorStop(0, '#6d5dfc');
+  gradient.addColorStop(1, '#0bb5a5');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  return canvas.toDataURL('image/png');
+}
+
 export function installTauriMock() {
   mockWindows('main');
   mockIPC(async (cmd, payload) => {
@@ -79,6 +91,11 @@ export function installTauriMock() {
           throw 'LOCAL_TOKEN_REQUIRED: device needs a valid LocalToken to read settings';
         }
         return { ...deviceSettings };
+      case 'fetch_image_base64':
+        // A browser can't download cross-origin images for a canvas; return a
+        // generated 128 × 128 gradient instead.
+        await delay(200);
+        return mockImageDataUrl();
       case 'set_local_token':
         if (args.token == null) localTokens.delete(args.ipAddress as string);
         else localTokens.set(args.ipAddress as string, args.token as number);
@@ -101,7 +118,7 @@ export function installTauriMock() {
       case 'reboot_device':
       case 'upload_image_from_url':
       case 'upload_image_from_file':
-      case 'set_screen_text':
+      case 'upload_image_data':
       case 'send_pc_metrics':
         await delay(200);
         return null;
