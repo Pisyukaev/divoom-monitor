@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Plus, Delete, Check } from '@element-plus/icons-vue';
+import { Plus, Delete, Check, Odometer } from '@element-plus/icons-vue';
 import {
   TEXT_ALIGNMENT_OPTIONS,
   FONT_OPTIONS,
   DEFAULT_TEXT_FONT,
   DEFAULT_TEXT_ALIGNMENT,
   DEFAULT_TEXT_SIZE,
+  DEFAULT_DEVICE_FONT,
+  DEVICE_FONTS,
+  LIVE_VALUES,
   MIN_TEXT_SIZE,
   MAX_TEXT_SIZE,
 } from '../../constants';
-import { SCREEN_SIZE, textAlignment, textFont, textSize } from '../../utils/screenRender';
+import {
+  SCREEN_SIZE,
+  deviceFont,
+  isLiveText,
+  textAlignment,
+  textFont,
+  textSize,
+} from '../../utils/screenRender';
 import type { TextElement as TextElementType } from '../../types/screen';
 
 const { t } = useI18n();
@@ -42,6 +52,7 @@ function blankText(): TextElementType {
     color: '#FFFFFF',
     alignment: DEFAULT_TEXT_ALIGNMENT,
     textWidth: SCREEN_SIZE,
+    deviceFont: DEFAULT_DEVICE_FONT,
   };
 }
 
@@ -56,8 +67,20 @@ const current = computed<TextElementType>(() => {
     font: textFont(text.font),
     fontSize: textSize(text),
     alignment: textAlignment(text.alignment),
+    deviceFont: deviceFont(text.deviceFont),
   };
 });
+
+/** Drawn and updated by the device itself (see utils/screenRender.ts). */
+const isLive = computed(() => isLiveText(current.value));
+
+function placeholderOf(key: string): string {
+  return `{${key}}`;
+}
+
+function insertValue(key: string) {
+  change('content', current.value.content + placeholderOf(key));
+}
 
 const canAdd = computed(() => current.value.content.trim() !== '' && props.textIds.length > 0);
 
@@ -77,6 +100,7 @@ function add() {
     font: current.value.font,
     fontSize: current.value.fontSize,
     color: current.value.color,
+    deviceFont: current.value.deviceFont,
   };
 }
 </script>
@@ -94,21 +118,41 @@ function add() {
       <el-input :model-value="current.content" :placeholder="t('textElement.textContent')" maxlength="511" clearable
         @update:model-value="(v: string) => change('content', v)" @keyup.enter="!isEditing && add()" />
       <el-color-picker :model-value="current.color" @update:model-value="(v) => change('color', v?.toUpperCase())" />
+      <el-dropdown trigger="click" @command="insertValue">
+        <el-button :icon="Odometer">{{ t('textElement.insertValue') }}</el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="value in LIVE_VALUES" :key="value.key" :command="value.key">
+              <span>{{ t(`liveValue.${value.labelKey}`) }}</span>
+              <code class="placeholder">{{ placeholderOf(value.key) }}</code>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
     <div class="grid">
-      <label class="field">
-        <span class="app-muted label">{{ t('textElement.font') }}</span>
-        <el-select :model-value="current.font" @update:model-value="(v: number) => change('font', v)">
-          <el-option v-for="font in FONT_OPTIONS" :key="font.value" :label="font.label" :value="font.value"
-            :style="{ fontFamily: font.family }" />
+      <label v-if="isLive" class="field wide">
+        <span class="app-muted label">{{ t('textElement.deviceFont') }}</span>
+        <el-select :model-value="current.deviceFont" @update:model-value="(v: number) => change('deviceFont', v)">
+          <el-option v-for="font in DEVICE_FONTS" :key="font.value" :value="font.value"
+            :label="font.noteKey ? `${font.value} — ${t(`textElement.${font.noteKey}`)}` : String(font.value)" />
         </el-select>
       </label>
-      <label class="field">
-        <span class="app-muted label">{{ t('textElement.fontSize') }}</span>
-        <el-input-number :model-value="current.fontSize" :min="MIN_TEXT_SIZE" :max="MAX_TEXT_SIZE"
-          controls-position="right" @update:model-value="(v) => change('fontSize', v)" />
-      </label>
+      <template v-else>
+        <label class="field">
+          <span class="app-muted label">{{ t('textElement.font') }}</span>
+          <el-select :model-value="current.font" @update:model-value="(v: number) => change('font', v)">
+            <el-option v-for="font in FONT_OPTIONS" :key="font.value" :label="font.label" :value="font.value"
+              :style="{ fontFamily: font.family }" />
+          </el-select>
+        </label>
+        <label class="field">
+          <span class="app-muted label">{{ t('textElement.fontSize') }}</span>
+          <el-input-number :model-value="current.fontSize" :min="MIN_TEXT_SIZE" :max="MAX_TEXT_SIZE"
+            controls-position="right" @update:model-value="(v) => change('fontSize', v)" />
+        </label>
+      </template>
       <label class="field">
         <span class="app-muted label">{{ t('textElement.positionX') }}</span>
         <el-input-number :model-value="current.x" :min="0" :max="SCREEN_SIZE - 1" controls-position="right"
@@ -135,7 +179,7 @@ function add() {
       </label>
     </div>
 
-    <p class="app-muted note">{{ t('textElement.drawNote') }}</p>
+    <p class="app-muted note">{{ isLive ? t('textElement.liveNote') : t('textElement.drawNote') }}</p>
 
     <div class="actions">
       <template v-if="isEditing && text">
@@ -175,6 +219,11 @@ function add() {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.row :deep(.el-color-picker),
+.row :deep(.el-dropdown) {
+  flex-shrink: 0;
 }
 
 .grid {
@@ -220,6 +269,12 @@ function add() {
 
 .label {
   font-size: 12px;
+}
+
+.placeholder {
+  margin-left: 12px;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .note {

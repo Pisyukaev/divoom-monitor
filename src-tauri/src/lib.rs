@@ -3,6 +3,7 @@ mod device_commands;
 mod divoom_api;
 mod divoom_protocol;
 mod draw_commands;
+mod live_screen;
 mod models;
 mod system_metrics;
 
@@ -130,6 +131,7 @@ pub fn run() {
             draw_commands::get_lcd_info,
             draw_commands::activate_pc_monitor,
             draw_commands::send_pc_metrics,
+            live_screen::send_live_screen,
             system_metrics::get_system_metrics,
             app_settings::set_close_to_tray,
             app_settings::get_close_to_tray,
