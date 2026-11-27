@@ -82,13 +82,17 @@ export const LIVE_VALUES: { key: string; labelKey: string; sample: string }[] = 
  * values itself, so only its own fonts can be used, and an id it lacks hangs
  * the whole screen on "loading...": don't add ids without trying them.
  * `previewSize` approximates the glyph height for the editor preview.
+ * `chars`, when set, are the only characters the font draws; the preview
+ * drops the rest like the device does.
  */
-export const DEVICE_FONTS: { value: number; noteKey?: string; previewSize: number }[] = [
+export const DEVICE_FONTS: { value: number; noteKey?: string; previewSize: number; chars?: string }[] = [
   { value: 4, previewSize: 10 },
   { value: 2, previewSize: 10 },
   { value: 32, previewSize: 11 },
   { value: 52, previewSize: 10 },
-  { value: 20, noteKey: 'deviceFontDigits', previewSize: 14 },
+  // On a Times Gate "F20 42% 55C" showed as "2042%55" (the % looks like a
+  // slash): letters and spaces are skipped. Other punctuation is untested.
+  { value: 20, noteKey: 'deviceFontDigits', previewSize: 14, chars: '0123456789%' },
   { value: 18, noteKey: 'deviceFontTiny', previewSize: 7 },
 ];
 export const DEFAULT_DEVICE_FONT = 4;
