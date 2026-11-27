@@ -85,10 +85,45 @@ async fn send_image(ip_address: &str, screen_index: u32, img: DynamicImage) -> R
         &general_purpose::STANDARD.encode(&jpeg),
     );
 
-    send_command_with_timeout(ip_address, &payload, IMAGE_UPLOAD_TIMEOUT)
+    let result = send_command_with_timeout(ip_address, &payload, IMAGE_UPLOAD_TIMEOUT)
         .await
-        .map_err(|e| format!("Failed to send image command: {}", e))?;
-    Ok(())
+        .map(|_| ())
+        .map_err(|e| format!("Failed to send image command: {}", e));
+
+    #[cfg(all(debug_assertions, not(test)))]
+    dump_sent_image(ip_address, screen_index, &jpeg, &result);
+
+    result
+}
+
+/// Dev builds only: keeps the exact JPEG sent to each screen, plus a log line
+/// with the device's answer, so a webcam photo of the device can be compared
+/// with what was actually sent. Files: `<temp>/divoom-monitor/sent/`.
+#[cfg(all(debug_assertions, not(test)))]
+fn dump_sent_image(ip_address: &str, screen_index: u32, jpeg: &[u8], result: &Result<(), String>) {
+    use std::io::Write;
+
+    let dir = std::env::temp_dir().join("divoom-monitor").join("sent");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let _ = std::fs::write(dir.join(format!("screen{}.jpg", screen_index)), jpeg);
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let status = match result {
+        Ok(()) => "ok".to_string(),
+        Err(e) => format!("error: {}", e),
+    };
+    if let Ok(mut log) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("log.txt"))
+    {
+        let _ = writeln!(log, "{} ip={} screen={} {}", ts, ip_address, screen_index, status);
+    }
 }
 
 #[tauri::command]
